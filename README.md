@@ -34,6 +34,10 @@ This repository documents a Young's modulus experiment-improvement project for t
 | `docs/physics-model.md` | Measurement principle and instrument design notes. |
 | `docs/software-architecture.md` | Desktop software architecture and main pages. |
 | `docs/measurement-data-flow.md` | CCD acquisition and experiment-record data flow. |
+| `docs/project-report-extract.md` | Markdown extraction of the original project report. |
+| `docs/software-operation-guide.md` | Markdown extraction of the original software operation guide. |
+| `docs/presentation-outline.md` | Extracted text outline from the presentation deck. |
+| `docs/source-materials/` | Original Word/PPT source materials preserved for reference. |
 
 Run:
 
@@ -52,6 +56,20 @@ Main UI source locations:
 - `app/YoungsModuleTest/Views/HomePage.xaml`
 - `app/YoungsModuleTest/Views/ExperimentPage.xaml`
 - `app/YoungsModuleTest/Views/SettingsPage.xaml`
+
+## Source Documents
+
+The original project documents are now included under `docs/source-materials/`:
+
+- `youngs-modulus-instrument-report.docx`
+- `software-operation-guide.docx`
+- `presentation-deck.pptx`
+
+For quick reading on GitHub, see:
+
+- `docs/project-report-extract.md`
+- `docs/software-operation-guide.md`
+- `docs/presentation-outline.md`
 
 ## Team And Copyright
 

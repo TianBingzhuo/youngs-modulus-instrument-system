@@ -19,6 +19,9 @@ AppPackages/
 *.docx
 *.pptx
 *.pdf
+!docs/source-materials/*.docx
+!docs/source-materials/*.pptx
+!docs/source-materials/*.pdf
 raw/
 private/
 evidence/
