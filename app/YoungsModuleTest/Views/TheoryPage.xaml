@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="YoungsModuleTest.Views.TheoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:YoungsModuleTest.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer>
+        <Grid Margin="24">
+            <StackPanel>
+                <TextBlock Text="原理介绍" FontSize="32" FontWeight="Bold" Margin="0,0,0,24"/>
+                <TextBlock Text="杨氏模量测试原理将在此处显示..." 
+                           FontSize="16" 
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <!-- TODO: 后续添加具体的原理介绍内容 -->
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</Page>

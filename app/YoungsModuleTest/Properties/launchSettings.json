@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "YoungsModuleTest (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "YoungsModuleTest (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
