@@ -1,35 +1,39 @@
-# Young's Modulus Instrument System
+# Young's Modulus Optical Measurement Instrument
 
-This project page connects applied-physics measurement with system engineering: optical measurement, sensor acquisition, data processing, and desktop software workflow.
+杨氏模量光学测量实验仪
 
-## One-Sentence Summary
+This repository documents a Young's modulus experiment-improvement project for the 2025 National Undergraduate Physics Experiment Competition (Innovation). The project is titled **Optical Improvement and Remote Pre-Lab Device for Young's Modulus Measurement**.
 
-The Young's modulus experiment can be framed as a measurement-to-software pipeline: physical deformation, optical amplification, CCD/camera acquisition, serial data, software processing, experiment records, and remote pre-lab support.
+本仓库整理的是“杨氏模量测量实验的光学改进及远程预习装置”的工程资料。项目针对传统杨氏模量实验中装置稳定性不足、调节繁琐、光路不直观、人工读数误差较大的问题，设计了双测量方法、CCD自动读数软件和线上预习装置。
 
-## System Chain
+## Project Highlights
 
-```text
-wire deformation and optical amplification
-  -> CCD / camera / serial data
-  -> data parsing and feature extraction
-  -> Young's modulus calculation and uncertainty-aware records
-  -> WinUI/.NET desktop workflow
-  -> remote pre-lab and teaching workflow
-```
+- A single instrument integrates two measurement methods: folded optical path measurement and projection measurement.
+- The mechanical structure uses an aluminum-profile tripod frame, custom wire fixtures, and a pulley-based loading mechanism to improve stability.
+- The projection method uses a slit, laser, and linear CCD to capture optical feature changes, then estimates deformation through software.
+- The WinUI 3 desktop application supports camera view, serial CCD acquisition, experiment records, data export/import, parameter configuration, least-squares fitting, and emergency stop/reset.
+- The project also includes a remote pre-lab concept so students can study the principle and observe/operate the experiment before the offline session.
 
-## Public Technical Framing
+## 中文说明
 
-- Physical measurement and uncertainty-aware experimental workflow.
-- Optical amplification and projection/folded optical-path methods at a high level.
-- CCD/camera/serial acquisition as a sensor-data pipeline.
-- Desktop software as an experiment-record and visualization workflow.
+项目核心思路不是简单“把传统实验搬到电脑上”，而是把传统拉伸法中的微小形变测量重新组织为一套更稳定、更直观、更适合教学的实验系统：
 
-## Public Source Code
+- 光路折叠法用于保留和强化光杠杆原理的可视化理解。
+- 投影法利用狭缝、点光源/线光源和线阵CCD，将钢丝形变量转化为可采集的光学特征尺寸变化。
+- 软件端通过串口读取CCD数据，绘制实时曲线，识别边界/特征尺寸，并结合施加力、钢丝直径、原长和CCD比例参数计算杨氏模量。
+- 当记录两组及以上数据后，程序可用最小二乘法计算当前材料的杨氏模量和拟合质量。
+- 线上预习装置用于把实验原理、模拟操作和远程观察结合起来，提高正式实验前的理解效率。
 
-- `app/YoungsModuleTest/`: cleaned WinUI/.NET desktop application source snapshot.
-- `src/simulated_ccd_reader.py`: a public-safe simulated data reader.
-- `src/uncertainty_budget.py`: a minimal uncertainty-budget calculation for measurement reporting.
-- `assets/README.md`: guidance for adding public screenshots or setup images.
+## Repository Layout
+
+| Path | Description |
+|---|---|
+| `app/YoungsModuleTest/` | WinUI 3 / .NET desktop application source code. |
+| `src/simulated_ccd_reader.py` | Small simulated CCD reader for understanding feature extraction. |
+| `src/uncertainty_budget.py` | Minimal Young's modulus and uncertainty calculation demo. |
+| `docs/physics-model.md` | Measurement principle and instrument design notes. |
+| `docs/software-architecture.md` | Desktop software architecture and main pages. |
+| `docs/measurement-data-flow.md` | CCD acquisition and experiment-record data flow. |
 
 Run:
 
@@ -40,7 +44,7 @@ python src/uncertainty_budget.py
 
 ## Application Snapshot
 
-The application snapshot keeps source files, XAML views, project metadata, and app assets. Local build outputs, `.vs/`, `bin/`, `obj/`, signing certificates, user-specific publish files, and packaged executables are excluded.
+The application source keeps the main WinUI 3 pages, project metadata, and app assets. Local build outputs, `.vs/`, `bin/`, `obj/`, signing certificates, user-specific publish files, and packaged executables are not committed.
 
 Main UI source locations:
 
@@ -49,14 +53,10 @@ Main UI source locations:
 - `app/YoungsModuleTest/Views/ExperimentPage.xaml`
 - `app/YoungsModuleTest/Views/SettingsPage.xaml`
 
-## Public Artifacts
+## Team And Copyright
 
-- `docs/physics-model.md`: high-level measurement model.
-- `docs/software-architecture.md`: desktop software and data-flow architecture.
-- `docs/data-pipeline.md`: synthetic CCD data and experiment-record pipeline.
+This project was developed by a student team. The published competition report records the team members as Ding Qingxiang, Zhu Zhaoxing, Tian Bingzhuo, Guo Zhimei, and Zhao Simeng, with guidance from Wu Jianhai and Yu Xiao. The design, device assembly, software development, experiment operation, data processing, report writing, and presentation work were completed collaboratively.
 
-## Public Boundary
+本项目为团队竞赛成果。软件、硬件、实验操作、报告、视频、数据处理和展示材料均有队友共同参与，每位成员都应获得相应尊重。本仓库由田秉卓维护，用于整理其中可公开复盘的工程代码与说明。
 
-This page does not publish raw reports, team information, private screenshots, instrument photos, executable programs, drivers, or signed packages. Personal contribution wording should remain conservative until role details are confirmed.
-
-For images, use only public-safe screenshots or equipment photos: no faces, no student names, no private lab records, no unpublished instrument schematics unless you are sure they can be public. A few cropped interface screenshots are more useful than dumping every design image.
+Unless otherwise stated, code and documents authored for this repository are released under the Apache License 2.0. Third-party drivers, SDKs, documents, and device-vendor materials retain their original licenses.

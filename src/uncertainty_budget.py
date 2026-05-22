@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Uncertainty-budget demo for a Young's modulus measurement pipeline."""
+"""Uncertainty-budget demo for a Young's modulus measurement."""
 
 from __future__ import annotations
 

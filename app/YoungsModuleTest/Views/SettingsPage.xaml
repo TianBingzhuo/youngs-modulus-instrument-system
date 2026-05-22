@@ -96,8 +96,8 @@
                                            FontSize="12" 
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            LineHeight="18">
-                                    <Run Text="©2025 河北工业大学杨氏模量实验仪小组 版权所有。"/><LineBreak/>
-                                    <Run Text="本程序由田秉卓利用AI工具辅助制作。"/>
+                                    <Run Text="©2025 河北工业大学杨氏模量实验仪小组。"/><LineBreak/>
+                                    <Run Text="本程序为杨氏模量测量实验装置配套开发。"/>
                                 </TextBlock>
                             </StackPanel>
 

@@ -1,10 +1,11 @@
-OS and Robotics System Software Portfolio
-Copyright 2026 Tian Bingzhuo
+Young's Modulus Optical Measurement Instrument
+Copyright 2026 Tian Bingzhuo and project contributors
 
-This repository contains cleaned public documentation and self-written demo
-source code for an academic portfolio around operating-system foundations,
-embedded systems, and robotics system software.
+This repository documents a team project for the 2025 National Undergraduate
+Physics Experiment Competition (Innovation). The device, software, experiment
+operation, report, data processing, and presentation materials were completed
+collaboratively by the student team.
 
-The repository intentionally excludes raw certificates, transcripts, private
-forms, team-member information, raw media, vendor SDK packages, build products,
-model files, and unreleased original project archives.
+Unless otherwise stated, source code and documentation authored for this
+repository are released under the Apache License 2.0. Third-party drivers,
+SDKs, documents, and device-vendor materials retain their original licenses.
