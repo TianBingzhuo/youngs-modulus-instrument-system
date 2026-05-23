@@ -6,6 +6,16 @@ This repository documents a Young's modulus experiment-improvement project for t
 
 本仓库整理的是“杨氏模量测量实验的光学改进及远程预习装置”的工程资料。项目针对传统杨氏模量实验中装置稳定性不足、调节繁琐、光路不直观、人工读数误差较大的问题，设计了双测量方法、CCD自动读数软件和线上预习装置。
 
+## Project At A Glance
+
+| Item | Summary |
+|---|---|
+| Competition | 2025 National Undergraduate Physics Experiment Competition (Innovation). |
+| System type | Young's modulus optical measurement instrument with folded optical path, projection/CCD route, and offline WinUI 3 software. |
+| Repository focus | Offline C# instrument software, original project materials, public-readable docs, visual supplement, and hardware-independent Python explanations. |
+| My role | Uploaded offline program design and measurement-principle design, plus public repository maintenance. |
+| Not included | Online pre-lab software, unreviewed raw experiment-result data, packaged Windows outputs, local IDE state, signing certificates, and third-party executable tools. |
+
 ## Project Highlights
 
 - A single instrument integrates two measurement methods: folded optical path measurement and projection measurement.
@@ -25,6 +35,16 @@ This repository documents a Young's modulus experiment-improvement project for t
 - 当记录两组及以上数据后，程序可用最小二乘法计算当前材料的杨氏模量和拟合质量。
 - 线上预习装置用于把实验原理、模拟操作和远程观察结合起来，提高正式实验前的理解效率。
 
+Because Young's modulus measurements depend strongly on instrument calibration, sample condition, and local setup, this public repository focuses on the measurement system and workflow rather than presenting one set of result data as a universal benchmark.
+
+## Visual Materials
+
+The images below are extracted from the project's own Word/PPT materials.
+
+![Instrument overview](docs/assets/instrument-overview.jpg)
+
+![WinUI experiment interface](docs/assets/winui-experiment-page.jpg)
+
 ## Repository Layout
 
 | Path | Description |
@@ -33,6 +53,7 @@ This repository documents a Young's modulus experiment-improvement project for t
 | `simulations/simulated_ccd_reader.py` | Hardware-independent Python simulation for understanding CCD feature extraction. |
 | `simulations/uncertainty_budget.py` | Hardware-independent Python calculation demo for Young's modulus and uncertainty. |
 | `docs/project-context-and-scope.md` | Project scope, competition context, and explicit team contribution notes. |
+| `docs/contribution-scope.md` | Team contribution split, public repository boundaries, and result-data note. |
 | `docs/physics-model.md` | Measurement principle and instrument design notes. |
 | `docs/software-architecture.md` | Desktop software architecture and main pages. |
 | `docs/measurement-data-flow.md` | CCD acquisition and experiment-record data flow. |
@@ -77,6 +98,7 @@ The original project documents are now included under `docs/source-materials/`:
 For quick reading on GitHub, see:
 
 - `docs/project-context-and-scope.md`
+- `docs/contribution-scope.md`
 - `docs/project-report-extract.md`
 - `docs/software-operation-guide.md`
 - `docs/vendor-tooling-notes.md`
