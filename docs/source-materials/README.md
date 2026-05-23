@@ -10,4 +10,4 @@ This folder preserves the original project documents used to build the public re
 
 The Markdown files in `docs/` are extracted or rewritten from these source materials so GitHub readers can browse the project without downloading office files.
 
-These documents come from a team competition project. Team contribution should be credited collectively unless a more precise contribution statement is confirmed by the team.
+These documents come from a team competition project. Team contribution should be credited collectively. For the current public repository scope, use the more explicit contribution note in `docs/project-context-and-scope.md`: 丁庆祥 handled the online pre-lab software that is not included here; 朱兆兴 handled mechanical structure; 田秉卓 handled the uploaded offline program design and measurement-principle design; 郭智美 and 赵思梦 handled measurement-principle design and data processing.

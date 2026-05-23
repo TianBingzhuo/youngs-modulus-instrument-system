@@ -13,6 +13,7 @@ This repository documents a Young's modulus experiment-improvement project for t
 - The projection method uses a slit, laser, and linear CCD to capture optical feature changes, then estimates deformation through software.
 - The WinUI 3 desktop application supports camera view, serial CCD acquisition, experiment records, data export/import, parameter configuration, least-squares fitting, and emergency stop/reset.
 - The project also includes a remote pre-lab concept so students can study the principle and observe/operate the experiment before the offline session.
+- This repository contains the uploaded offline WinUI 3 instrument program and public-readable documentation. The online pre-lab software was a separate teammate contribution and is not included here.
 
 ## 中文说明
 
@@ -31,10 +32,12 @@ This repository documents a Young's modulus experiment-improvement project for t
 | `app/YoungsModuleTest/` | Original WinUI 3 / .NET C# desktop application source code. |
 | `simulations/simulated_ccd_reader.py` | Hardware-independent Python simulation for understanding CCD feature extraction. |
 | `simulations/uncertainty_budget.py` | Hardware-independent Python calculation demo for Young's modulus and uncertainty. |
+| `docs/project-context-and-scope.md` | Project scope, competition context, and explicit team contribution notes. |
 | `docs/physics-model.md` | Measurement principle and instrument design notes. |
 | `docs/software-architecture.md` | Desktop software architecture and main pages. |
 | `docs/measurement-data-flow.md` | CCD acquisition and experiment-record data flow. |
 | `docs/csharp-implementation-pseudocode.md` | Pseudocode summary of the original C# application logic. |
+| `docs/vendor-tooling-notes.md` | Notes on TCD1304 CCD customer materials, SSCOM, CH340 drivers, and third-party redistribution scope. |
 | `docs/visual-supplement.md` | Representative images extracted from the original Word/PPT materials. |
 | `docs/project-report-extract.md` | Markdown extraction of the original project report. |
 | `docs/software-operation-guide.md` | Markdown extraction of the original software operation guide. |
@@ -54,6 +57,8 @@ The original software is the C# WinUI 3 application under `app/YoungsModuleTest/
 
 The application source keeps the main WinUI 3 pages, project metadata, and app assets. Local build outputs, `.vs/`, `bin/`, `obj/`, signing certificates, user-specific publish files, and packaged executables are not committed.
 
+Third-party CCD module tools, serial assistants, USB-to-serial drivers, and Visual Studio installers are not mirrored in this repository unless their redistribution terms are clear. See `docs/vendor-tooling-notes.md`.
+
 Main UI source locations:
 
 - `app/YoungsModuleTest/MainWindow.xaml`
@@ -71,8 +76,10 @@ The original project documents are now included under `docs/source-materials/`:
 
 For quick reading on GitHub, see:
 
+- `docs/project-context-and-scope.md`
 - `docs/project-report-extract.md`
 - `docs/software-operation-guide.md`
+- `docs/vendor-tooling-notes.md`
 - `docs/presentation-outline.md`
 - `docs/visual-supplement.md`
 
@@ -80,6 +87,26 @@ For quick reading on GitHub, see:
 
 This project was developed by a student team. The published competition report records the team members as Ding Qingxiang, Zhu Zhaoxing, Tian Bingzhuo, Guo Zhimei, and Zhao Simeng, with guidance from Wu Jianhai and Yu Xiao. The design, device assembly, software development, experiment operation, data processing, report writing, and presentation work were completed collaboratively.
 
+Known contribution split for the current public-repository scope:
+
+| Member | Main contribution |
+|---|---|
+| 丁庆祥 | Online pre-lab software / remote learning software. This part is not included in the current repository. |
+| 朱兆兴 | Mechanical structure. |
+| 田秉卓 | Offline program design included in this repository, plus measurement-principle design. |
+| 郭智美 | Measurement-principle design and data processing. |
+| 赵思梦 | Measurement-principle design and data processing. |
+
 本项目为团队竞赛成果。软件、硬件、实验操作、报告、视频、数据处理和展示材料均有队友共同参与，每位成员都应获得相应尊重。本仓库由田秉卓维护，用于整理其中可公开复盘的工程代码与说明。
 
-Unless otherwise stated, code and documents authored for this repository are released under the Apache License 2.0. Third-party drivers, SDKs, documents, and device-vendor materials retain their original licenses.
+当前公开仓库范围内的已知分工如下：
+
+| 成员 | 主要贡献 |
+|---|---|
+| 丁庆祥 | 在线版软件 / 远程预习软件；该部分不在当前仓库中。 |
+| 朱兆兴 | 机械结构。 |
+| 田秉卓 | 当前仓库上传的线下仪器程序设计，以及测量原理设计。 |
+| 郭智美 | 测量原理设计与数据处理。 |
+| 赵思梦 | 测量原理设计与数据处理。 |
+
+Unless otherwise stated, code and documents authored for this repository are released under the Apache License 2.0 to the extent the contributors have the right to license them. Third-party drivers, SDKs, documents, and device-vendor materials retain their original licenses.

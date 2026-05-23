@@ -6,6 +6,22 @@ Physics Experiment Competition (Innovation). The device, software, experiment
 operation, report, data processing, and presentation materials were completed
 collaboratively by the student team.
 
+Known contribution split for the current public-repository scope:
+- 丁庆祥: online pre-lab software / remote learning software. This part is not
+  included in the current repository.
+- 朱兆兴: mechanical structure.
+- 田秉卓: offline program design included in this repository, plus
+  measurement-principle design.
+- 郭智美: measurement-principle design and data processing.
+- 赵思梦: measurement-principle design and data processing.
+
 Unless otherwise stated, source code and documentation authored for this
-repository are released under the Apache License 2.0. Third-party drivers,
-SDKs, documents, and device-vendor materials retain their original licenses.
+repository are released under the Apache License 2.0 to the extent the
+contributors have the right to license them. Third-party drivers, SDKs, documents, and
+device-vendor materials retain their original licenses.
+
+Third-party CCD module tools, USB-to-serial drivers, serial-port assistants,
+Visual Studio installers, and vendor example packages are not covered by this
+repository license. They should be obtained from their rights holders or
+authorized distribution channels unless explicit redistribution permission is
+confirmed.

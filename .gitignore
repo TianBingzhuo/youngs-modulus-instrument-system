@@ -13,6 +13,8 @@ AppPackages/
 *.exe
 *.dll
 *.pdb
+*.rar
+*.7z
 *.msix
 *.appx
 *.appxbundle

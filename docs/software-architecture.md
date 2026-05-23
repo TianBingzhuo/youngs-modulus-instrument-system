@@ -4,6 +4,8 @@ This document expands the software architecture from the operation guide. The co
 
 The desktop application is a WinUI 3 / .NET program for the Young's modulus instrument. It supports experiment navigation, CCD serial acquisition, camera observation, experiment records, import/export, parameter setting, real-time plotting, least-squares fitting, and emergency stop/reset.
 
+Scope note: this document describes the offline WinUI 3 instrument program included in this repository. The online pre-lab software mentioned in the project report was handled separately and is not part of this repository.
+
 For implementation-level pseudocode that follows the original C# program, see `docs/csharp-implementation-pseudocode.md`.
 
 ![WinUI experiment page with CCD curve](assets/winui-experiment-page.jpg)
