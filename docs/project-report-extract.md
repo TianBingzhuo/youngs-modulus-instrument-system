@@ -2,7 +2,7 @@
 
 This Markdown file is extracted from the project report Word document so the repository can be read directly on GitHub. The original Word file is also preserved under `docs/source-materials/`.
 
-Source file: `docs/source-materials/youngs-modulus-instrument-report.docx`
+Source file: `docs/source-materials/仪器讲解.docx`
 
 2025年全国大学生物理实验竞赛（创新）自选类题目
 

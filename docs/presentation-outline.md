@@ -1,6 +1,6 @@
 # Presentation Outline
 
-Extracted text from the project presentation deck. The original PPTX file is preserved under `docs/source-materials/presentation-deck.pptx`.
+Extracted text from the project presentation deck. The original PPTX file is preserved under `docs/source-materials/演讲版本.pptx`.
 
 ## Slide 1
 

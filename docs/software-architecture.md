@@ -1,8 +1,12 @@
 # Software Architecture
 
-This document expands the software architecture from the operation guide. The complete extracted guide is available in `docs/software-operation-guide.md`, and the original Word file is preserved in `docs/source-materials/software-operation-guide.docx`.
+This document expands the software architecture from the operation guide. The complete extracted guide is available in `docs/software-operation-guide.md`, and the original Word file is preserved in `docs/source-materials/程序操作.docx`.
 
 The desktop application is a WinUI 3 / .NET program for the Young's modulus instrument. It supports experiment navigation, CCD serial acquisition, camera observation, experiment records, import/export, parameter setting, real-time plotting, least-squares fitting, and emergency stop/reset.
+
+For implementation-level pseudocode that follows the original C# program, see `docs/csharp-implementation-pseudocode.md`.
+
+![WinUI experiment page with CCD curve](assets/winui-experiment-page.jpg)
 
 ## Application Structure
 

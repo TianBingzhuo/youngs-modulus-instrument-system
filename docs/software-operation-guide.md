@@ -2,7 +2,7 @@
 
 This Markdown file is extracted from the operation guide Word document. It records the WinUI 3 application structure and experiment operation flow.
 
-Source file: `docs/source-materials/software-operation-guide.docx`
+Source file: `docs/source-materials/程序操作.docx`
 
 ## 1. 项目概览
 

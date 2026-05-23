@@ -28,12 +28,14 @@ This repository documents a Young's modulus experiment-improvement project for t
 
 | Path | Description |
 |---|---|
-| `app/YoungsModuleTest/` | WinUI 3 / .NET desktop application source code. |
-| `src/simulated_ccd_reader.py` | Small simulated CCD reader for understanding feature extraction. |
-| `src/uncertainty_budget.py` | Minimal Young's modulus and uncertainty calculation demo. |
+| `app/YoungsModuleTest/` | Original WinUI 3 / .NET C# desktop application source code. |
+| `simulations/simulated_ccd_reader.py` | Hardware-independent Python simulation for understanding CCD feature extraction. |
+| `simulations/uncertainty_budget.py` | Hardware-independent Python calculation demo for Young's modulus and uncertainty. |
 | `docs/physics-model.md` | Measurement principle and instrument design notes. |
 | `docs/software-architecture.md` | Desktop software architecture and main pages. |
 | `docs/measurement-data-flow.md` | CCD acquisition and experiment-record data flow. |
+| `docs/csharp-implementation-pseudocode.md` | Pseudocode summary of the original C# application logic. |
+| `docs/visual-supplement.md` | Representative images extracted from the original Word/PPT materials. |
 | `docs/project-report-extract.md` | Markdown extraction of the original project report. |
 | `docs/software-operation-guide.md` | Markdown extraction of the original software operation guide. |
 | `docs/presentation-outline.md` | Extracted text outline from the presentation deck. |
@@ -42,9 +44,11 @@ This repository documents a Young's modulus experiment-improvement project for t
 Run:
 
 ```bash
-python src/simulated_ccd_reader.py
-python src/uncertainty_budget.py
+python simulations/simulated_ccd_reader.py
+python simulations/uncertainty_budget.py
 ```
+
+The original software is the C# WinUI 3 application under `app/YoungsModuleTest/`. The Python files under `simulations/` are later public-facing, hardware-independent explanations; they are not the original control program.
 
 ## Application Snapshot
 
@@ -61,15 +65,16 @@ Main UI source locations:
 
 The original project documents are now included under `docs/source-materials/`:
 
-- `youngs-modulus-instrument-report.docx`
-- `software-operation-guide.docx`
-- `presentation-deck.pptx`
+- `仪器讲解.docx`
+- `程序操作.docx`
+- `演讲版本.pptx`
 
 For quick reading on GitHub, see:
 
 - `docs/project-report-extract.md`
 - `docs/software-operation-guide.md`
 - `docs/presentation-outline.md`
+- `docs/visual-supplement.md`
 
 ## Team And Copyright
 

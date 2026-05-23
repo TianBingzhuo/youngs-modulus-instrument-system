@@ -59,11 +59,11 @@ The software supports:
 
 This makes the application useful not just for live measurement, but also for report writing, review, and teaching demonstration.
 
-## Hardware-Independent Demos
+## Hardware-Independent Simulations
 
-The scripts in `src/` are small standalone demos:
+The scripts in `simulations/` are small standalone demos written for public explanation and hardware-free inspection:
 
 - `simulated_ccd_reader.py`: generates CCD-like data and finds a synthetic peak.
 - `uncertainty_budget.py`: computes a Young's modulus value and a simple uncertainty interval.
 
-They do not replace the WinUI application or the physical instrument, but they make the data-processing idea easy to inspect without hardware.
+They do not replace the original WinUI 3 / C# application or the physical instrument. The original application logic is under `app/YoungsModuleTest/`; the Python files only preserve the data-processing idea in a lighter simulation form.

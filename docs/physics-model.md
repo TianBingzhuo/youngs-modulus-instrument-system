@@ -1,6 +1,6 @@
 # Measurement Principle And Instrument Design
 
-This document expands the measurement principle from the original project report. The complete extracted report is available in `docs/project-report-extract.md`, and the original Word report is preserved in `docs/source-materials/youngs-modulus-instrument-report.docx`.
+This document expands the measurement principle from the original project report. The complete extracted report is available in `docs/project-report-extract.md`, and the original Word report is preserved in `docs/source-materials/仪器讲解.docx`.
 
 ## Problem Background
 
@@ -12,6 +12,8 @@ Young's modulus measurement is a classic college physics experiment. It connects
 - **Manual reading error:** subjective reading and repeated manual calculation introduce avoidable uncertainty.
 
 The project responds to these problems by improving the mechanical frame, integrating two optical measurement routes, adding CCD-based reading, and designing a remote pre-lab workflow.
+
+![Labeled overview of the Young's modulus instrument](assets/instrument-labeled-overview.jpg)
 
 ## Overall Measurement Chain
 
