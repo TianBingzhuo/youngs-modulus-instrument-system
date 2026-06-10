@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Tian Bingzhuo and project contributors
+# SPDX-License-Identifier: Apache-2.0
 """Synthetic CCD intensity reader for a public portfolio demo."""
 
 import math

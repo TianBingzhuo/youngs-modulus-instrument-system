@@ -1,6 +1,32 @@
 # Presentation Outline
 
-Extracted text from the project presentation deck. The original PPTX file is preserved under `docs/source-materials/演讲版本.pptx`.
+This is the extracted text from our project presentation deck. The original PPTX file is preserved under `docs/source-materials/演讲版本.pptx`.
+
+## English Summary
+
+The presentation covers our competition entry for the 11th National Undergraduate Physics Experiment Competition (Innovation), in the "experiment instrument development and improvement" category. The deck is structured as follows:
+
+- **Slides 1-2:** Title and table of contents.
+- **Slide 3:** Target positioning -- three core improvement areas: structural optimization (solving wire shaking), reading precision (software-assisted CCD reading instead of manual), and device integration (combining two measurement methods on one instrument).
+- **Slides 4-5:** Measurement principles for both the folded optical path method (based on optical-lever amplification with least-squares fitting) and the projection method (based on similar triangles with CCD feature extraction).
+- **Slides 6-12:** Experiment hardware and software -- the main support module (aluminum-profile tripod, pulley loading, movable platforms), the dual measurement modules (folded optical path system and projection/CCD system), the TCD1304 CCD connection, the WinUI 3 software interface, and the overall assembled device.
+- **Slides 13-15:** Online pre-lab device -- a separate remote learning setup with stepper motor loading, camera/scale reading, force sensor, and microcontroller control.
+- **Slide 16:** Dual-measurement experiment procedure -- leveling, initial readings, incremental loading/unloading with simultaneous microscope and CCD recording.
+- **Slide 17:** Comparison table between traditional and improved methods across seven dimensions (stability, coordination, deformation measurement, complexity, method integration, load control, optical path visibility).
+- **Slide 18:** Error analysis and improvement measures (wire fatigue, pulley friction, ambient light on CCD).
+- **Slide 19:** Innovation points (method innovation, mode innovation, self-developed original).
+- **Slide 20:** Performance specifications for both online and offline instruments.
+- **Slide 21:** Cost breakdown (total approximately 4800 RMB).
+- **Slide 22:** Team member contribution breakdown (5 members, 100% participation).
+- **Slide 23:** Closing slide.
+
+For the full extracted Chinese text, see below.
+
+---
+
+# 中文版本
+
+以下是从答辩 PPT 中提取的文字内容。原始 PPTX 文件保存在 `docs/source-materials/演讲版本.pptx`。
 
 ## Slide 1
 
@@ -17,7 +43,7 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 
 ## Slide 2
 
-- 目　录
+- 目 录
 - CONTENTS
 - 目标定位
 - Target Location
@@ -32,17 +58,17 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 
 ## Slide 3
 
-- 针对传统实验设备稳定性不足、操作繁琐、协同性缺失等核心问题，我们进行了优化
+- 针对传统实验设备稳定性不足、操作繁琐、协同性缺失等核心问题，我们做了针对性的优化
 - 3
 - 目标定位
 - 设备集成化：解决协同性缺失与操作繁琐问题
-- 几何光学设计精密光路，将基于不同放大机制的光路折叠法与投影法集成于一体；将传统独立的读数仪器与操作仪器直接连接，这些设计将传统的单一验证实验提升为综合性、探究性实验，简化了操作流程，减小设备整体体积，提升实验的协调性和整体效率。
+- 用几何光学设计精密光路，把基于不同放大机制的光路折叠法与投影法集成到一台仪器上；同时把传统独立的读数仪器与操作仪器直接连在一起。这些设计把原来的单一验证实验提升为综合性、探究性实验，操作流程简化了，设备整体体积也减小了，实验的协调性和整体效率都有提升。
 - 结构
 - 优化
 - ：解决钢丝晃动与误差较大问题
-- 采用稳固的三脚架提供支撑；定制夹具精准固定钢丝；设计多滑轮平稳施力系统。三种改进方式可以为金属丝提供稳定且可调节的拉力，大幅提升测量的稳定性与可靠性。
+- 用稳固的三脚架提供支撑；定制夹具精准固定钢丝；设计了多滑轮平稳施力系统。三种改进方式给金属丝提供了稳定且可调节的拉力，测量的稳定性和可靠性提升了很多。
 - 读数精准化：解决人为读数误差问题
-- 在投影法测量基础上，搭配自主开发的专用读数软件。以软件自动化读数替代传统人工主观读数，避免人为误差，实现读数过程标准化、精准化，进一步降低实验数据的偶然误差。同时通过光路折叠法来人工检测，达到双重验证。
+- 在投影法测量的基础上，搭配我们自主开发的专用读数软件。用软件自动化读数替代传统人工主观读数，避免了人为误差，读数过程也更加标准化、精准化，实验数据的偶然误差进一步降低。同时通过光路折叠法做人工检测，达到双重验证。
 - 杨氏模量测量实验的光学改进及远程预习装置
 
 ## Slide 4
@@ -213,9 +239,9 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 - 线上预习装置
 - 3D
 - 模型图
-- 现介绍
+- 接下来介绍
 - 线上预习
-- 实验装置及其实验流程，由于学生线下操作不涉及此装置，本
+- 实验装置及其实验流程。由于学生线下操作不涉及这个装置，本
 - PPT
 - 只做简要说明，详细内容可见文档。
 
@@ -250,30 +276,30 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 
 ## Slide 16
 
-- 调节调平旋钮
+- 先调节调平旋钮
 - 确保
 - 仪器
 - 水平
 - ，
-- 并检查是否有两个砝码
+- 检查是否有两个砝码
 - (
 - 配重
 - )
-- 使钢丝保持伸直状态，
-- 此重力不计入所加作用力内
-- ，并同时
+- 让钢丝保持伸直状态。
+- 这部分重力不计入所加作用力内
+- 。同时
 - 记录显微镜
 - 初始
 - 位置
 - 和计算机上
 - CCD
 - 初始数值。
-- 逐个加砝码，每加一个砝码，同时调节显微镜位置 ，记录此时对应位置；记录计算机上CCD光学特征尺寸长度
+- 然后逐个加砝码，每加一个砝码，同时调节显微镜位置 ，记录此时对应位置；同时记录计算机上CCD光学特征尺寸长度
 - ;
-- 直至加到
+- 一直加到
 - 6
-- 个砝码。
-- 加重完成后，将砝码依次取下，并同时记录显微镜位置和计算机CCD光学特征尺寸长度。
+- 个砝码为止。
+- 加重完成后，把砝码依次取下，同时记录显微镜位置和计算机CCD光学特征尺寸长度。
 - 实验步骤
 - 杨氏模量测量实验的光学改进及远程预习装置
 - 16
@@ -317,12 +343,12 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 - 标准化安装流程+界面化操作
 - 降低学习门槛，适合教学与科研快速上手
 - 测量方法集成
-- “
+- "
 - 一法一器
-- ”，仅支持拉伸法测量
-- “
+- "，仅支持拉伸法测量
+- "
 - 一器多测
-- ”，可同时实现光路折叠法和投影法的测量
+- "，可同时实现光路折叠法和投影法的测量
 - 结果之间
 - 互相验证
 - ，实现装置的多种测量同时实现
@@ -338,7 +364,7 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 - 传统仪器
 - 光线不可见
 - ，几何光学放大法难理解。
-- 光路折叠法中反射镜光路清晰，投影法中激光狭缝投影直观，便于理解“微小形变放大” 物理过程
+- 光路折叠法中反射镜光路清晰，投影法中激光狭缝投影直观，便于理解"微小形变放大" 物理过程
 - 光路清晰可见
 - ，学生接受度高、易于理解
 - 实验对比
@@ -378,11 +404,11 @@ Extracted text from the project presentation deck. The original PPTX file is pre
 - 。
 - 模式创新
 - 线上预习
-- 平台，打破教学时空限制。解决传统实验“课时有限、预习不充分”的问题；预习数据可同步至线下实验系统，帮助教师提前掌握学生预习情况，实现个性化教学指导，
+- 平台，打破教学时空限制。解决传统实验"课时有限、预习不充分"的问题；预习数据可同步至线下实验系统，帮助教师提前掌握学生预习情况，实现个性化教学指导，
 - 优化实验教学全流程
 - 。
 - 自主原创
-- 我们以CCD和计算机替代了传统装置的显微镜与人工读数记录方式，用于捕捉和分析光学信号变化以测量微小形变，让我们的装置具备
+- 我们用CCD和计算机替代了传统装置的显微镜与人工读数记录方式，用于捕捉和分析光学信号变化来测量微小形变，让我们的装置具备
 - 形变过程与数据实时可视化
 - 的独特优势。而且装置结构开放，各组件连接与工作原理清晰明了，更适合物理实验教学
 - 。

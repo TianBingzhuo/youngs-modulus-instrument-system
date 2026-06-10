@@ -18,6 +18,13 @@ AppPackages/
 *.msix
 *.appx
 *.appxbundle
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 *.docx
 *.pptx
 *.pdf

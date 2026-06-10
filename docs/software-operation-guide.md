@@ -1,19 +1,40 @@
 # Software Operation Guide
 
-This Markdown file is extracted from the operation guide Word document. It records the WinUI 3 application structure and experiment operation flow.
+This is the software operation guide for our WinUI 3 desktop application, extracted from the original Word document. It walks through the application structure and how to actually use it during an experiment session.
 
 Source file: `docs/source-materials/程序操作.docx`
 
+## English Summary
+
+The application is a WinUI 3 / .NET desktop program that serves as the instrument control and data-analysis platform for our Young's modulus measurement system. Key features include:
+
+- A left navigation bar with six modules: Home, Theory, Experiment, Calibration, System Check, and Settings.
+- The Home page provides quick-access cards and local experiment record management (save, open, delete).
+- The Experiment page is the core workspace: weight input, camera preview, serial CCD data acquisition with real-time intensity curve, measurement recording, least-squares fitting (after 2+ data points), and import/export of images, CCD data, and experiment records.
+- A global emergency stop button (power-button style) sits in the upper-right corner of the main window. When pressed, it turns red and stops all experiment processes while keeping camera and CCD observation available. Pressing it again resets the state.
+- Wire parameters (diameter, effective length, CCD scale factor -- approximately 0.343 for our instrument) can be configured in the experiment page.
+- CCD integration time should be tuned based on the real-time curve: reduce it if the curve bottom clips the chart boundary, increase it if contrast is insufficient.
+
+For the full operation details, see the Chinese version below.
+
+---
+
+# 中文版本
+
+本文提取自操作说明 Word 文档，记录了 WinUI 3 应用的结构和实验操作流程。
+
+源文件：`docs/source-materials/程序操作.docx`
+
 ## 1. 项目概览
 
-该程序旨在提供一个与杨氏模量实验仪器配套的的实验操作与管理平台，主要用于实验数据的采集、显示、导入导出与设备控制。界面采用现代化 WinUI3 风格，支持导航栏、实验数据可视化以及强制停机/复位功能。
+这个程序是为杨氏模量实验仪器配套的操作与管理平台，主要负责实验数据的采集、显示、导入导出和设备控制。界面采用 WinUI3 风格，支持导航栏、实验数据可视化以及强制停机/复位功能。
 
 ## 2. 程序结构
 
-App.xaml / App.xaml.cs  
+App.xaml / App.xaml.cs
 应用入口，负责全局资源、样式及导航框架初始化。
 
-MainWindow.xaml / .cs  
+MainWindow.xaml / .cs
 主窗口，包含：
 
 左侧导航栏（首页、原理介绍、实验中心、仪器校准、系统体检、设置）。
@@ -22,7 +43,7 @@ MainWindow.xaml / .cs
 
 Views/ （各功能页面）
 
-HomePage：首页，含“快速访问”和“实验记录”。
+HomePage：首页，含"快速访问"和"实验记录"。
 
 TheoryPage：原理介绍（文档预留）。
 
@@ -34,10 +55,10 @@ SystemCheckPage：系统体检（文档预留）。
 
 SettingsPage：设置界面。
 
-Assets/  
+Assets/
 程序图标资源（WinUI3 内置图标 + 应用专用图标）。
 
-Properties/  
+Properties/
 launchSettings.json 用于调试配置。
 
 ## 3. 功能说明
@@ -62,7 +83,7 @@ launchSettings.json 用于调试配置。
 
 ### 3.2 首页
 
-显示 “首页” 二字。
+显示 "首页" 二字。
 
 快速访问：显示左侧导航栏所有功能模块的入口。
 
@@ -148,17 +169,17 @@ launchSettings.json：调试参数配置。
 
 实验参数设置
 
-点击“钢丝参数”，可以设置实验材料的直径、有效长度、以及CCD的放大比例（对于本仪器而言经过测算为0.343，为光源到狭缝的距离/光源到线阵CCD的距离）
+点击"钢丝参数"，可以设置实验材料的直径、有效长度、以及CCD的放大比例（对于本仪器而言经过测算为0.343，为光源到狭缝的距离/光源到线阵CCD的距离）
 
 实验准备
 
-打开“实时画面”，系统自动连接默认摄像头。
+打开"实时画面"，系统自动连接默认摄像头。
 
 用户可切换不同摄像头，并保持最佳画质（自动抗闪烁）。
 
 实验运行
 
-点按CCD数据采集界面右侧的“刷新”按钮，刷新串口列表
+点按CCD数据采集界面右侧的"刷新"按钮，刷新串口列表
 
 选择CCD实际使用的串口
 
@@ -166,11 +187,11 @@ CCD 传感器通过串口传输数据，程序自动绘制实时力学曲线。
 
 观察图像的顶部与低谷是否合适，如果底部触碰了图像边界则需要调节到更小的积分时间，如果图像上部与下部区分不明显则需要调节到更大的积分时间
 
-在“重量填写”框中输入实验重量（兼容正小数）。也可通过输入框右侧的上下箭头按 1kg 步进调整重量。按回车键确定，知道实验状态中“当前施加力”示数为刚才输入的数字
+在"重量填写"框中输入实验重量（兼容正小数）。也可通过输入框右侧的上下箭头按 1kg 步进调整重量。按回车键确定，知道实验状态中"当前施加力"示数为刚才输入的数字
 
-点按蓝色的“记录数据”按钮，会自动记录当前施加的力与CCD记录到的长度
+点按蓝色的"记录数据"按钮，会自动记录当前施加的力与CCD记录到的长度
 
-当积累到2组及以上的数据后，在左侧下方“实验状态”一栏会自动利用最小二乘法计算出当前材料的杨氏模量和数据的拟合质量。
+当积累到2组及以上的数据后，在左侧下方"实验状态"一栏会自动利用最小二乘法计算出当前材料的杨氏模量和数据的拟合质量。
 
 如果需要保存CCD图像、CCD原始数据、实验记录，可以点按右下方的三个按钮来完成
 
