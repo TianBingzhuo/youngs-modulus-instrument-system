@@ -1,13 +1,18 @@
-# Source Materials
+# Original Project Documents
 
-This folder preserves the original project documents used to build the public repository documentation.
+| File | Purpose |
+|---|---|
+| `仪器讲解.docx` | Instrument design, measurement principle, experiment steps, innovation points, and project report. |
+| `程序操作.docx` | Operation guide for the offline WinUI 3 application. |
+| `演讲版本.pptx` | Original project presentation deck. |
 
-| File | Source | Purpose |
-|---|---|---|
-| `仪器讲解.docx` | Original project report Word document | Full report for the instrument design, measurement principle, innovation points, experiment steps, and team contribution appendix. |
-| `程序操作.docx` | Original software operation Word document | Operation guide for the WinUI 3 application, including navigation, CCD acquisition, recording, export/import, and emergency stop. |
-| `演讲版本.pptx` | Original presentation deck | Slide deck for project explanation and presentation. |
+The Markdown documents in `docs/` provide a lighter browser-reading path. These Office files remain the richer primary project materials.
 
-The Markdown files in `docs/` are extracted or rewritten from these source materials so GitHub readers can browse the project without downloading office files.
+They were created for a team competition project and retain team authorship. Their inclusion here supports project review and attribution; it does not by itself grant a blanket reuse license. See [../../LICENSE_SCOPE.md](../../LICENSE_SCOPE.md).
 
-These documents come from a team competition project. Team contribution should be credited collectively. For the current public repository scope, use the more explicit contribution note in `docs/project-context-and-scope.md`: 丁庆祥 handled the online pre-lab software that is not included here; 朱兆兴 handled mechanical structure; 田秉卓 handled the uploaded offline program design and measurement-principle design; 郭智美 and 赵思梦 handled measurement-principle design and data processing.
+## 分工摘要
+
+- 丁庆祥：在线预习与远程学习软件。
+- 朱兆兴：机械结构。
+- 田秉卓：线下 C# 仪器程序与测量原理设计。
+- 郭智美、赵思梦：测量原理设计与数据处理。

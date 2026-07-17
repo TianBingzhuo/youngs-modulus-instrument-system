@@ -46,7 +46,7 @@ For every recorded point, the application stores:
 - current wire and scale parameters;
 - experiment record information for later recovery/export.
 
-After at least two records are collected, the software estimates Young's modulus with least-squares fitting and reports fitting quality. This matches the teaching goal: students can see how additional measurement points affect the result, which is honestly a much better learning experience than just plugging numbers into a formula once.
+After at least two records are collected, the software estimates Young's modulus with least-squares fitting and reports fitting quality. This supports the teaching goal by showing how each additional measurement point affects the fitted result, rather than reducing the experiment to a single formula substitution.
 
 ## Export And Import
 
@@ -118,7 +118,7 @@ CCD byte stream
 - 当前的钢丝和比例参数；
 - 实验记录信息，便于后续恢复/导出。
 
-收集到至少两组数据后，软件会用最小二乘法估算杨氏模量并报告拟合质量。这和教学目标是一致的：学生可以看到每多加一个数据点对结果的影响——说实话，这比只代一次公式的体验好多了。
+收集到至少两组数据后，软件会用最小二乘法估算杨氏模量并报告拟合质量。这与教学目标一致：学生可以观察每个新增测量点对拟合结果的影响，而不是只完成一次公式代入。
 
 ## 导出与导入
 

@@ -1,155 +1,98 @@
 # Project Context And Scope
 
-This repository documents our team project for the 2025 National Undergraduate Physics Experiment Competition (Innovation): **Optical Improvement and Remote Pre-Lab Device for Young's Modulus Measurement**.
+This repository documents our entry to the 2025 National Undergraduate Physics Experiment Competition (Innovation): **Optical Improvement and Remote Pre-Lab Device for Young's Modulus Measurement**.
 
-## Project Problem
+## Problem
 
-Young's modulus measurement is a classic college physics experiment, but the traditional teaching setup has several practical problems that we experienced firsthand:
+The traditional tensile-method teaching setup exposed several practical problems during operation:
 
-- the frame and wire can shake during loading and adjustment;
-- the optical path isn't intuitive enough for first-time learners;
-- telescope/scale adjustment takes too much class time;
-- manual reading and repeated calculation introduce subjective errors;
-- pre-lab learning and offline experiment operation are often disconnected.
+- vibration during loading and adjustment;
+- an optical path that is difficult for first-time learners to understand;
+- time-consuming telescope and scale adjustment;
+- subjective manual reading and repeated calculation;
+- a gap between pre-lab learning and instrument operation.
 
-Our goal wasn't just to build a calculator. We wanted to rethink how the Young's modulus experiment could be made more stable, more intuitive, and more suitable for teaching.
+The project therefore treated the experiment as a complete teaching and measurement system rather than only adding a calculator.
 
-## Project Solution
-
-The project combines four parts:
+## System Design
 
 | Part | Role |
 |---|---|
-| Folded optical path method | Keeps the optical-lever idea visible and provides an independent measurement route. |
-| Projection method with linear CCD | Converts slit/optical-feature changes into a CCD intensity curve and software-readable deformation value. |
-| Improved mechanical structure | Uses an aluminum-profile triangular frame, custom fixtures, movable platforms, and pulley loading to reduce shaking. |
-| Teaching workflow | Combines offline measurement with an online pre-lab concept so students can understand the principle before entering the lab. |
+| Folded optical path | Preserves a visible optical-lever route and provides an independent measurement method. |
+| Slit projection and linear CCD | Converts wire elongation into an optical feature that can be sampled and processed digitally. |
+| Mechanical redesign | Uses an aluminum-profile triangular frame, fixtures, movable platforms, and pulley loading to improve stability and adjustment. |
+| Offline WinUI 3 software | Handles system checks, serial acquisition, live waveform display, feature detection, records, fitting, and export/import. |
+| Online pre-lab | A separate teammate contribution for learning the principle before the physical lab. |
 
-The offline instrument software included in this repository focuses on the projection/CCD route: serial data acquisition, live CCD curve display, boundary/feature estimation, measurement records, least-squares fitting, import/export, and emergency stop/reset.
+## Repository Coverage
 
-## Repository Scope
+- `app/YoungsModuleTest/`: offline C# / WinUI 3 application.
+- `docs/source-materials/`: reviewed Word/PPT report, operation guide, and presentation.
+- `docs/assets/`: figures extracted from the team documents.
+- `docs/*.md`: physics, architecture, data-flow, and operation notes for browser reading.
+- `simulations/`: later hardware-independent explanations of CCD feature extraction and uncertainty propagation.
 
-Included here:
+Physical CAD and the separate online pre-lab source are represented through the project documents and contribution record, not as source trees in this repository. Build output and device/vendor tools are handled according to their own ownership and distribution terms.
 
-- `app/YoungsModuleTest/`: the uploaded WinUI 3 / C# offline instrument program.
-- `docs/source-materials/`: original Word/PPT source materials for the report, operation guide, and presentation.
-- `docs/assets/`: representative figures extracted from the original materials.
-- `docs/*.md`: GitHub-readable explanations of the physics model, software architecture, data flow, and operation guide.
-- `simulations/`: hardware-independent Python explanations for CCD feature extraction and uncertainty calculation.
-
-Not included here:
-
-- the online pre-lab software written for the remote learning part;
-- physical CAD manufacturing files beyond the preserved pictures and report descriptions;
-- packaged Windows build outputs, local Visual Studio state, signing certificates, and device-vendor drivers.
-
-This separation is intentional. The current repository is centered on the uploaded offline program, the optical/measurement principle design, and public-readable documentation.
-
-## Team Contribution Notes
-
-This was a five-person team project. The original report records that all five members participated in the project plan. The current public repository uses the following more explicit contribution note:
+## Team Contributions
 
 | Member | Main contribution |
 |---|---|
-| 丁庆祥 | Online pre-lab software / remote learning software. This part is not included in the current repository. |
+| 丁庆祥 | Online pre-lab and remote-learning software. |
 | 朱兆兴 | Mechanical structure. |
-| 田秉卓 | Offline program design included in this repository, plus measurement-principle design. |
+| 田秉卓 | Offline C# program and measurement-principle design. |
 | 郭智美 | Measurement-principle design and data processing. |
 | 赵思梦 | Measurement-principle design and data processing. |
 
-中文分工说明：
+The competition result remains a collaborative team achievement. See [../LICENSE_SCOPE.md](../LICENSE_SCOPE.md) for authorship and reuse terms.
 
-| 成员 | 主要贡献 |
-|---|---|
-| 丁庆祥 | 在线版软件 / 远程预习软件。该部分不在当前仓库中。 |
-| 朱兆兴 | 机械结构。 |
-| 田秉卓 | 当前仓库上传的线下仪器程序设计，以及测量原理设计。 |
-| 郭智美 | 测量原理设计与数据处理。 |
-| 赵思梦 | 测量原理设计与数据处理。 |
+## Reading Order
 
-The competition result should still be understood as collaborative team work. This table clarifies the public repository scope; it doesn't diminish the shared project ownership recorded in the original report.
-
-## How To Read This Repository
-
-Start with:
-
-1. `docs/project-report-extract.md` for the full project narrative.
-2. `docs/physics-model.md` for measurement principles.
-3. `docs/software-architecture.md` and `docs/csharp-implementation-pseudocode.md` for the C# application logic.
-4. `docs/visual-supplement.md` for instrument and UI images.
-5. `app/YoungsModuleTest/` for the actual uploaded offline application source.
+1. [project-report-extract.md](project-report-extract.md)
+2. [physics-model.md](physics-model.md)
+3. [software-architecture.md](software-architecture.md)
+4. [csharp-implementation-pseudocode.md](csharp-implementation-pseudocode.md)
+5. [visual-supplement.md](visual-supplement.md)
+6. `../app/YoungsModuleTest/`
 
 ---
 
-# 中文版本
+# 项目背景与范围
 
-本仓库记录的是我们团队参加 2025 年全国大学生物理实验竞赛（创新）的作品：**杨氏模量测量实验的光学改进及远程预习装置**。
+本仓库记录的是我们参加 2025 年全国大学生物理实验竞赛（创新）的作品：**杨氏模量测量实验的光学改进及远程预习装置**。
 
-本文件用于说明项目背景、当前仓库范围，以及队友分工。完整研究报告、软件操作说明和答辩材料保存在 `docs/source-materials/`，便于核对原始叙述。
+## 问题背景
 
-## 项目问题
+传统拉伸法实验在实际操作中存在支架和钢丝易振动、光路理解门槛高、望远镜和标尺调节耗时、人工读数带来主观误差，以及预习与线下操作脱节等问题。因此，项目把它作为一套完整的教学和测量系统来重新设计，而不是只增加一个计算器。
 
-杨氏模量测量是大学物理实验中的经典项目，但传统教学装置存在几个我们实际碰到的问题：
+## 系统方案
 
-- 加载和调节时支架和钢丝容易晃动；
-- 光路对初次接触的学生来说不够直观；
-- 调望远镜/标尺花了太多课上时间；
-- 人工读数和反复计算引入主观误差；
-- 课前预习和线下实验操作常常是脱节的。
-
-我们的目标不只是做一个计算器，而是围绕"如何让杨氏模量实验更稳定、更直观、更适合教学"来重构实验系统。
-
-## 项目方案
-
-项目由四个部分组成：
-
-| Part | Role |
+| 组成 | 作用 |
 |---|---|
-| Folded optical path method | Keeps the optical-lever idea visible and provides an independent measurement route. |
-| Projection method with linear CCD | Converts slit/optical-feature changes into a CCD intensity curve and software-readable deformation value. |
-| Improved mechanical structure | Uses an aluminum-profile triangular frame, custom fixtures, movable platforms, and pulley loading to reduce shaking. |
-| Teaching workflow | Combines offline measurement with an online pre-lab concept so students can understand the principle before entering the lab. |
+| 光路折叠法 | 保留可视化的光杠杆路径，并提供独立测量方法。 |
+| 狭缝投影与线阵 CCD | 把钢丝伸长转化为可采样、可处理的光学特征。 |
+| 机械结构改进 | 使用铝型材三角框架、夹具、移动平台和滑轮加载，提高稳定性与可调性。 |
+| 线下 WinUI 3 软件 | 完成系统检查、串口采集、实时波形、特征识别、记录、拟合和导入导出。 |
+| 在线预习 | 由队友独立负责，用于正式实验前理解原理。 |
 
-本仓库中包含的线下仪器软件主要聚焦投影法/CCD 路线：串口数据采集、CCD 实时曲线显示、边界/特征估算、测量记录、最小二乘拟合、导入导出以及紧急停机/复位。
+## 仓库内容
 
-## 仓库范围
+- `app/YoungsModuleTest/`：线下 C# / WinUI 3 程序。
+- `docs/source-materials/`：已审核的 Word/PPT 报告、操作说明和答辩材料。
+- `docs/assets/`：从团队文档中提取的图片。
+- `docs/*.md`：便于网页阅读的物理原理、架构、数据流和操作说明。
+- `simulations/`：后续编写的不依赖硬件的 CCD 特征提取和不确定度传播说明。
 
-包含在内：
+机械 CAD 和独立的在线预习源码没有作为源码树放入当前仓库，其工作仍通过项目文档和分工记录体现。构建产物及设备/厂商工具遵循各自权利与分发条款。
 
-- `app/YoungsModuleTest/`：上传的 WinUI 3 / C# 线下仪器程序。
-- `docs/source-materials/`：报告、操作说明和答辩的原始 Word/PPT 材料。
-- `docs/assets/`：从原始材料中提取的代表性图片。
-- `docs/*.md`：适合在 GitHub 上阅读的物理模型、软件架构、数据流和操作说明。
-- `simulations/`：不依赖硬件的 Python 原理说明（CCD 特征提取和不确定度计算）。
-
-不包含在内：
-
-- 远程预习部分的线上预习软件；
-- 超出保留图片和报告描述之外的实体 CAD 制造文件；
-- 打包的 Windows 构建产物、本地 Visual Studio 状态、签名证书和设备供应商驱动。
-
-这种分离是有意为之。当前仓库以线下程序、光学/测量原理设计和公开可读的文档为核心。
-
-## 团队贡献说明
-
-这是一个五人团队项目。原始报告记载五位成员都参与了方案设计。当前公开仓库使用以下更明确的贡献说明：
+## 团队分工
 
 | 成员 | 主要贡献 |
 |---|---|
-| 丁庆祥 | 在线版软件 / 远程预习软件。该部分不在当前仓库中。 |
+| 丁庆祥 | 在线预习与远程学习软件。 |
 | 朱兆兴 | 机械结构。 |
-| 田秉卓 | 当前仓库上传的线下仪器程序设计，以及测量原理设计。 |
+| 田秉卓 | 线下 C# 程序与测量原理设计。 |
 | 郭智美 | 测量原理设计与数据处理。 |
 | 赵思梦 | 测量原理设计与数据处理。 |
 
-竞赛成果仍应被理解为团队的协作成果。这张表澄清的是公开仓库的范围，并不削弱原始报告中记载的共同项目所有权。
-
-## 如何阅读本仓库
-
-建议从以下文件开始：
-
-1. `docs/project-report-extract.md` — 完整的项目叙述。
-2. `docs/physics-model.md` — 测量原理。
-3. `docs/software-architecture.md` 和 `docs/csharp-implementation-pseudocode.md` — C# 应用逻辑。
-4. `docs/visual-supplement.md` — 仪器和 UI 图片。
-5. `app/YoungsModuleTest/` — 实际上传的线下应用源码。
+竞赛成果仍属于团队协作成果。署名和复用说明见 [../LICENSE_SCOPE.md](../LICENSE_SCOPE.md)。

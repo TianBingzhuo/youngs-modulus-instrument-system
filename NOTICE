@@ -1,27 +1,18 @@
 Young's Modulus Optical Measurement Instrument
-Copyright 2026 Tian Bingzhuo and project contributors
+Copyright 2025-2026 Tian Bingzhuo and project contributors
 
-This repository documents a team project for the 2025 National Undergraduate
-Physics Experiment Competition (Innovation). The device, software, experiment
-operation, report, data processing, and presentation materials were completed
-collaboratively by the student team.
+This repository documents a five-person team project for the 2025 National
+Undergraduate Physics Experiment Competition (Innovation).
 
-Known contribution split for the current public-repository scope:
-- 丁庆祥: online pre-lab software / remote learning software. This part is not
-  included in the current repository.
+Known contribution split:
+- 丁庆祥: online pre-lab and remote-learning software.
 - 朱兆兴: mechanical structure.
-- 田秉卓: offline program design included in this repository, plus
-  measurement-principle design.
+- 田秉卓: offline C# instrument program and measurement-principle design;
+  repository maintenance.
 - 郭智美: measurement-principle design and data processing.
 - 赵思梦: measurement-principle design and data processing.
 
-Unless otherwise stated, source code and documentation authored for this
-repository are released under the Apache License 2.0 to the extent the
-contributors have the right to license them. Third-party drivers, SDKs, documents, and
-device-vendor materials retain their original licenses.
-
-Third-party CCD module tools, USB-to-serial drivers, serial-port assistants,
-Visual Studio installers, and vendor example packages are not covered by this
-repository license. They should be obtained from their rights holders or
-authorized distribution channels unless explicit redistribution permission is
-confirmed.
+Apache-2.0 applies only to material whose rights holder has granted that
+license. Original team Word/PPT documents and images derived from them retain
+team authorship. Third-party drivers, SDKs, CCD tools, serial assistants, and
+vendor materials retain their own terms. See LICENSE_SCOPE.md.
