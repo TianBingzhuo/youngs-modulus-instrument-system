@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.Storage;
+using YoungsModuleTest.Maintenance;
 
 
 
@@ -28,8 +29,8 @@ namespace YoungsModuleTest.Views
 {
     public sealed partial class HomePage : Page
     {
-        public ObservableCollection<QuickAccessItem> QuickAccessItems { get; private set; }
-        public ObservableCollection<ExperimentRecord> ExperimentRecords { get; private set; }
+        public ObservableCollection<QuickAccessItem> QuickAccessItems { get; private set; } = new();
+        public ObservableCollection<ExperimentRecord> ExperimentRecords { get; private set; } = new();
 
         public HomePage()
         {
@@ -61,68 +62,56 @@ namespace YoungsModuleTest.Views
 
         private async void LoadExperimentRecords()
         {
+            await RecordFile.Gate.WaitAsync();
             try
             {
-                var localFolder = ApplicationData.Current.LocalFolder;
-                var recordsFile = await localFolder.TryGetItemAsync("experiment_records.json");
-
-                if (recordsFile is StorageFile file)
-                {
-                    var json = await FileIO.ReadTextAsync(file);
-                    var records = JsonSerializer.Deserialize<ExperimentRecord[]>(json);
-
-                    ExperimentRecords.Clear();
-                    if (records != null)
-                    {
-                        foreach (var record in records)
-                        {
-                            ExperimentRecords.Add(record);
-                        }
-                    }
-                }
-                else
-                {
-                    // 添加示例数据
-                    ExperimentRecords.Add(new ExperimentRecord
-                    {
-                        Name = "示例实验 1",
-                        DateTime = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd HH:mm:ss"),
-                        Description = "材料：铜丝，长度：100cm"
-                    });
-                }
+                var records = await ReadRecords();
+                ReplaceRecords(records);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // 记录加载失败，使用默认的示例数据
-                ExperimentRecords.Clear();
-                ExperimentRecords.Add(new ExperimentRecord
-                {
-                    Name = "示例实验 1",
-                    DateTime = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd HH:mm:ss"),
-                    Description = "材料：铜丝，长度：100cm"
-                });
+                RecordStatus.Text = $"记录读取失败，原文件未改动: {ex.Message}";
             }
+            finally { RecordFile.Gate.Release(); }
         }
 
-        private async Task SaveExperimentRecords()
+        private static string RecordsPath => System.IO.Path.Combine(
+            ApplicationData.Current.LocalFolder.Path, "experiment_records.json");
+
+        private static async Task<List<ExperimentRecord>> ReadRecords()
         {
+            string? json = await RecordFile.ReadAsync(RecordsPath);
+            if (json == null) return new List<ExperimentRecord>();
+            var records = JsonSerializer.Deserialize<List<ExperimentRecord>>(json)
+                ?? throw new InvalidDataException("Experiment records must be a JSON array.");
+            if (records.Any(r => r == null)) throw new InvalidDataException("Null experiment record.");
+            return records;
+        }
+
+        private void ReplaceRecords(List<ExperimentRecord> records)
+        {
+            ExperimentRecords.Clear();
+            foreach (var record in records) ExperimentRecords.Add(record);
+            RecordStatus.Text = records.Count == 0 ? "暂无实验记录" : "";
+        }
+
+        private async Task DeleteSavedRecords(string? name)
+        {
+            await RecordFile.Gate.WaitAsync();
             try
             {
-                var localFolder = ApplicationData.Current.LocalFolder;
-                var recordsFile = await localFolder.CreateFileAsync("experiment_records.json",
-                    CreationCollisionOption.ReplaceExisting);
-
-                var recordsArray = new ExperimentRecord[ExperimentRecords.Count];
-                ExperimentRecords.CopyTo(recordsArray, 0);
-
-                var json = JsonSerializer.Serialize(recordsArray,
-                    new JsonSerializerOptions { WriteIndented = true });
-                await FileIO.WriteTextAsync(recordsFile, json);
+                var records = await ReadRecords();
+                if (name == null) records.Clear();
+                else records.RemoveAll(r => r.Name == name);
+                await RecordFile.WriteAsync(RecordsPath, JsonSerializer.Serialize(records,
+                    new JsonSerializerOptions { WriteIndented = true }));
+                ReplaceRecords(records);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // TODO: 显示保存失败的消息
+                RecordStatus.Text = $"删除未保存，原记录保留: {ex.Message}";
             }
+            finally { RecordFile.Gate.Release(); }
         }
 
         private void QuickAccessGrid_ItemClick(object sender, ItemClickEventArgs e)
@@ -168,8 +157,7 @@ namespace YoungsModuleTest.Views
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
-                ExperimentRecords.Clear();
-                await SaveExperimentRecords();
+                await DeleteSavedRecords(null);
             }
         }
 
@@ -224,8 +212,7 @@ namespace YoungsModuleTest.Views
                 var result = await dialog.ShowAsync();
                 if (result == ContentDialogResult.Primary)
                 {
-                    ExperimentRecords.Remove(record);
-                    await SaveExperimentRecords();
+                    await DeleteSavedRecords(record.Name);
                 }
             }
         }

@@ -21,7 +21,7 @@ The project therefore treated the experiment as a complete teaching and measurem
 | Folded optical path | Preserves a visible optical-lever route and provides an independent measurement method. |
 | Slit projection and linear CCD | Converts wire elongation into an optical feature that can be sampled and processed digitally. |
 | Mechanical redesign | Uses an aluminum-profile triangular frame, fixtures, movable platforms, and pulley loading to improve stability and adjustment. |
-| Offline WinUI 3 software | Handles system checks, serial acquisition, live waveform display, feature detection, records, fitting, and export/import. |
+| Offline WinUI 3 software | Serial acquisition, waveform display, feature detection, records and export/import; fitting code is retained with result display disabled. System Check is a placeholder. |
 | Online pre-lab | A separate teammate contribution for learning the principle before the physical lab. |
 
 ## Repository Coverage
@@ -72,7 +72,7 @@ The competition result remains a collaborative team achievement. See [../LICENSE
 | 光路折叠法 | 保留可视化的光杠杆路径，并提供独立测量方法。 |
 | 狭缝投影与线阵 CCD | 把钢丝伸长转化为可采样、可处理的光学特征。 |
 | 机械结构改进 | 使用铝型材三角框架、夹具、移动平台和滑轮加载，提高稳定性与可调性。 |
-| 线下 WinUI 3 软件 | 完成系统检查、串口采集、实时波形、特征识别、记录、拟合和导入导出。 |
+| 线下 WinUI 3 软件 | 实现串口采集、波形显示、特征识别、记录和导入导出；保留拟合计算但未开启结果显示。系统体检仍为预留页。 |
 | 在线预习 | 由队友独立负责，用于正式实验前理解原理。 |
 
 ## 仓库内容

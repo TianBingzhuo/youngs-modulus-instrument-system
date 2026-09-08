@@ -1,5 +1,7 @@
 # Project Report Extract
 
+> Historical project report, not a current feature checklist. The original software description includes intended hardware stop/reset, automatic force input and complete snapshot handling that the current application does not implement. See the [current operation guide](software-operation-guide.md). 原文保留设计描述；当前程序的载荷手动输入，停止按钮仅锁定软件采集，照片独立保存。
+
 This Markdown file is extracted from our original project report Word document, so the repository can be read directly on GitHub without needing to download the office files. The original Word file is also preserved under `docs/source-materials/`.
 
 Source file: `docs/source-materials/仪器讲解.docx`

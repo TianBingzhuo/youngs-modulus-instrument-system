@@ -1,214 +1,82 @@
 # Software Operation Guide
 
-This is the software operation guide for our WinUI 3 desktop application, extracted from the original Word document. It walks through the application structure and how to actually use it during an experiment session.
+This guide describes the maintained C# application. The original [程序操作.docx](source-materials/程序操作.docx) is retained as a historical project document; some features described there were planned but are not implemented.
 
-Source file: `docs/source-materials/程序操作.docx`
+**The title-bar stop button is a software acquisition lock, not a physical emergency stop.** It cancels CCD polling and prevents new acquisition, data recording and CSV import. It does not remove power, unload the wire, stop the camera or reset hardware. Unlocking requires an explicit new Start action.
 
-## English Summary
+The rest of this guide uses the Chinese labels shown by the application.
 
-The application is a WinUI 3 / .NET desktop program that serves as the instrument control and data-analysis platform for our Young's modulus measurement system. Key features include:
+## 准备运行
 
-- A left navigation bar with six modules: Home, Theory, Experiment, Calibration, System Check, and Settings.
-- The Home page provides quick-access cards and local experiment record management (save, open, delete).
-- The Experiment page is the core workspace: weight input, camera preview, serial CCD data acquisition with real-time intensity curve, measurement recording, least-squares fitting (after 2+ data points), and import/export of images, CCD data, and experiment records.
-- A global emergency stop button (power-button style) sits in the upper-right corner of the main window. When pressed, it turns red and stops all experiment processes while keeping camera and CCD observation available. Pressing it again resets the state.
-- Wire parameters (diameter, effective length, CCD scale factor -- approximately 0.343 for our instrument) can be configured in the experiment page.
-- CCD integration time should be tuned based on the real-time curve: reduce it if the curve bottom clips the chart boundary, increase it if contrast is insufficient.
+先按 [README](../README.md#build-on-windows) 构建 Windows 程序，在 Visual Studio 中选择相应的启动配置进行部署与调试。需要连接 CCD 时，先安装板卡对应的 USB 转串口驱动，确认接线和供电，再进入“实验中心”。
 
-For the full operation details, see the Chinese version below.
+本程序沿用原项目的串口配置：921600 波特率、8 数据位、无校验、1 停止位。它假定一次 CCD 响应由 3648 个 8 位光强值组成。相同的 TCD1304 传感器不代表板卡通信协议相同，请先核对你使用的模块。
 
----
+## 不连接硬件试用
 
-# 中文版本
+在仓库根目录执行：
 
-本文提取自操作说明 Word 文档，记录了 WinUI 3 应用的结构和实验操作流程。
+```sh
+python simulations/simulated_ccd_reader.py --csv synthetic-ccd.csv
+```
 
-源文件：`docs/source-materials/程序操作.docx`
+进入“实验中心”，在未采集、未锁定的状态下点击“导入实验数据”，选择这个 CSV。程序会显示合成波形、边界和宽度。它可以用来熟悉界面，不应作为实验结果提交。
 
-## 1. 项目概览
+CSV 必须是 UTF-8 文本，首行为 `pixelIndex,intensity` 或 `像素索引,光强度`，随后恰好 3648 行。索引按 0 到 3647 排列，光强为 0 到 255 的整数。最大文件大小为 128 KiB。格式不正确时保留当前波形并提示错误。
 
-这个程序是为杨氏模量实验仪器配套的操作与管理平台，主要负责实验数据的采集、显示、导入导出和设备控制。界面采用 WinUI3 风格，支持导航栏、实验数据可视化以及强制停机/复位功能。
+## 采集 CCD 波形
 
-## 2. 程序结构
+1. 刷新串口列表，选择 CCD 实际使用的端口。
+2. 选择积分时间。修改值在下一次点击“开始采集”时发送，采集中不可修改。
+3. 点击“开始采集”，观察光强曲线和暗区边界。
+4. 需要调整积分时间时，先停止采集，再修改并重新开始。
+5. 波形稳定后再记录测量。边界落在明显错误的位置时，先检查光路、接线和曝光，不要只看程序给出的宽度。
 
-App.xaml / App.xaml.cs
-应用入口，负责全局资源、样式及导航框架初始化。
+“停止采集”取消轮询并清理待处理数据。页面切换会关闭该页的串口与摄像头。串口读写失败或缓存溢出时，程序停止采集并提示重新连接。
 
-MainWindow.xaml / .cs
-主窗口，包含：
+原协议没有在本程序中实现帧头、校验和或丢字节重同步。重新连接也不能证明物理信号已经恢复正确，仍需检查波形。
 
-左侧导航栏（首页、原理介绍、实验中心、仪器校准、系统体检、设置）。
+## 记录测量
 
-右上角 强制停机按钮（电源键样式），实现实验运行的强制终止/恢复。
+在“钢丝参数”中填写直径、有效长度和 CCD 到钢丝的比例系数。直径和长度使用毫米。比例系数默认 0.343，是原装置的几何参数，不是所有装置通用的标定值。
 
-Views/ （各功能页面）
+载荷输入使用 **kg**。源码的历史字段名叫 `AppliedForce`，拟合时才乘以 9.8 换算成 N。没有接入力传感器自动读取载荷。
 
-HomePage：首页，含"快速访问"和"实验记录"。
+输入载荷后点击“记录数据”。每条记录包含载荷、光学宽度、左右边界、材料和时间。全平、全黑等没有明暗变化的波形不能记作有效测量。其他噪声、错位或失焦仍需要人工判断。
 
-TheoryPage：原理介绍（文档预留）。
+数据保存到应用本地数据目录的 `experiment_records.json`。保存失败时会显示“未保存”，内存中的数据仍在，但不能当作已经写入磁盘。首页读取文件失败时不再自动生成示例记录，也不会用空列表覆盖损坏的文件。
 
-ExperimentPage：实验界面，包含重量输入、摄像头窗口、力传感器数据绘图、进度条、数据导入导出按钮。
+**钢丝参数仍保存在应用设置中，不是每条记录独立保存。** 打开旧记录或继续追加前，需要核对当前参数。至少两个有效点可进入源码中的拟合计算，但这一版没有开启杨氏模量和拟合质量的数值显示。
 
-CalibrationPage：仪器校准（文档预留）。
+## 拍照与导出
 
-SystemCheckPage：系统体检（文档预留）。
+“启动摄像头”用于观察装置；拍照会把 JPEG 保存到 Windows 图片库的“杨氏模量测试仪”文件夹。当前页面只保留最近 16 张缩略图，已保存的 JPEG 不会因此删除。摄像头权限和图片库写入权限需要允许。
 
-SettingsPage：设置界面。
+底部按钮的用途是：
 
-Assets/
-程序图标资源（WinUI3 内置图标 + 应用专用图标）。
+| 按钮 | 文件 | 内容 |
+|---|---|---|
+| 导出CCD数据 | CSV | 当前帧的像素索引和原始光强值。 |
+| 保存实验报告 | TXT | 当前测量记录、界面参数与统计文本。 |
+| 导入实验数据 | CSV | 单帧 CCD 数据，不是整个实验档案。 |
 
-Properties/
-launchSettings.json 用于调试配置。
+报告不是完整的参数备份，也不保证包含拟合数值。原代码中的 `SaveCompleteExperimentData()` 未接入保存流程，`ConvertBitmapToBase64()` 仍返回空字符串。照片、完整 CCD 帧和所有设备设置不能依赖 JSON 实验记录自动恢复。
 
-## 3. 功能说明
+## 软件停止与恢复
 
-### 3.1 主界面与导航
+按标题栏的电源形状按钮后，按钮变红。程序锁定采集、记录和导入入口，等待采集任务结束，并忽略旧采集任务排队的画面更新。已经进入串口驱动的写入可能仍需完成或超时，因此这不是实时硬件急停。
 
-左侧导航栏分为六大板块：
+摄像头观察可以继续。需要停止电机、切断供电或卸载砝码时，使用仪器的实体控制。
 
-首页（HomePage）
+再次点击按钮只解除软件锁定。它不会执行 `ResetInstrument()` 的硬件动作，也不会自动开始采集。确认设备安全、波形和参数正确后，再手动开始。
 
-原理介绍（TheoryPage）
+## 常见问题
 
-实验中心（ExperimentPage）
-
-仪器校准（CalibrationPage）
-
-系统体检（SystemCheckPage）
-
-设置（SettingsPage）
-
-（所有图标均来自 WinUI3 自带图标库。）
-
-### 3.2 首页
-
-显示 "首页" 二字。
-
-快速访问：显示左侧导航栏所有功能模块的入口。
-
-实验记录：支持保存实验记录、打开历史记录恢复实验结果。
-
-支持 单条删除、全部删除（垃圾桶图标）。
-
-记录存储在本地，后期也将支持 CSV 文件导出/导入。
-
-### 3.3 实验界面
-
-重量填写：数值输入框（兼容正小数）。
-
-实时画面：摄像头窗口，支持切换摄像头，默认最高画质，抗闪烁自动。
-
-力传感器数据：串口接收 CCD 数据，绘制实时曲线。
-
-自动绘图：实验过程中动态刷新图表。
-
-数据操作按钮：
-
-导出实验图片
-
-导出实验数据
-
-导入实验数据
-
-进度条：在实验运行时显示（无具体百分比，仅运行状态）。
-
-### 3.4 强制停机按钮
-
-布局在主窗口右上角。
-
-状态切换：
-
-正常：默认灰色。
-
-按下：变为红色，触发强制停机逻辑：
-
-停止所有运行的实验进程。
-
-禁用实验相关按钮（置灰）。
-
-再次按下：恢复正常颜色，触发复位逻辑：
-
-启用实验相关按钮。
-
-恢复仪器初始状态（接口预留）。
-
-## 4. 配置文件
-
-app.manifest：定义应用权限与兼容性（Windows 11 24H2）。
-
-Package.appxmanifest：打包配置文件，定义应用 ID、图标、声明的能力。
-
-launchSettings.json：调试参数配置。
-
-.editorconfig：代码风格约定。
-
-5实验操作流程
-
-## 1. 程序启动
-
-打开程序后，进入 主界面（MainWindow）。
-
-右上角可见 强制停机按钮（电源样式），初始为 灰色（未激活状态）。
-
-## 2. 首页操作
-
-在首页界面，用户可以看到：
-
-快速访问（导航快捷入口，内容与左侧栏一致）。
-
-实验记录（保存的历史实验，带删除与恢复功能）。
-
-用户可选择：
-
-新建实验：通过左侧栏进入 实验中心。
-
-删除实验记录：单条删除或垃圾桶图标清空全部。
-
-## 3. 实验中心操作
-
-实验参数设置
-
-点击"钢丝参数"，可以设置实验材料的直径、有效长度、以及CCD的放大比例（对于本仪器而言经过测算为0.343，为光源到狭缝的距离/光源到线阵CCD的距离）
-
-实验准备
-
-打开"实时画面"，系统自动连接默认摄像头。
-
-用户可切换不同摄像头，并保持最佳画质（自动抗闪烁）。
-
-实验运行
-
-点按CCD数据采集界面右侧的"刷新"按钮，刷新串口列表
-
-选择CCD实际使用的串口
-
-CCD 传感器通过串口传输数据，程序自动绘制实时力学曲线。
-
-观察图像的顶部与低谷是否合适，如果底部触碰了图像边界则需要调节到更小的积分时间，如果图像上部与下部区分不明显则需要调节到更大的积分时间
-
-在"重量填写"框中输入实验重量（兼容正小数）。也可通过输入框右侧的上下箭头按 1kg 步进调整重量。按回车键确定，知道实验状态中"当前施加力"示数为刚才输入的数字
-
-点按蓝色的"记录数据"按钮，会自动记录当前施加的力与CCD记录到的长度
-
-当积累到2组及以上的数据后，在左侧下方"实验状态"一栏会自动利用最小二乘法计算出当前材料的杨氏模量和数据的拟合质量。
-
-如果需要保存CCD图像、CCD原始数据、实验记录，可以点按右下方的三个按钮来完成
-
-## 4. 强制停机操作
-
-当实验过程中出现异常，用户可点击 强制停机按钮。
-
-按下后按钮变为 红色。
-
-实验会立即停止。CCD和摄像头由于仅作为观测设备，仍然会正常工作，方便观察实验仪器是否恢复到了正常状态。
-
-所有实验相关按钮自动置灰（禁用状态）。
-
-再次点击按钮：
-
-恢复为正常颜色（灰色）。
-
-实验相关按钮重新启用。
-
-仪器状态复位。
+| 现象 | 先检查 |
+|---|---|
+| 找不到串口 | USB 驱动、连接线、供电，以及端口是否被其他程序占用。 |
+| 已连接但没有波形 | 模块是否支持当前波特率、0xA2 请求和 3648 字节响应约定。 |
+| 提示缓存溢出 | 停止后重新连接，检查设备是否持续发送、协议是否匹配；不要把超长数据直接截成“有效帧”。 |
+| CSV 被拒绝 | 编码、表头、完整行数、索引顺序和光强范围。 |
+| 记录文件读写失败 | 先备份原文件，再检查磁盘空间、权限与 JSON 格式。不要用初始化操作覆盖唯一副本。 |
+| 校准或系统体检页没有功能 | 这些页面目前是预留页，不是自动校准或设备诊断。 |

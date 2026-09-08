@@ -152,7 +152,8 @@
                         </Button>
                     </Grid>
 
-                    <ListView x:Name="ExperimentRecordsList" 
+                    <TextBlock x:Name="RecordStatus" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <ListView x:Name="ExperimentRecordsList"
                               Margin="0,12,0,0"
                               MaxHeight="400">
                         <ListView.ItemTemplate>

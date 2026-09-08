@@ -6,6 +6,8 @@
 | `程序操作.docx` | Operation guide for the offline WinUI 3 application. |
 | `演讲版本.pptx` | Original project presentation deck. |
 
+These files retain the original design descriptions, including planned software features. They have not been rewritten to match later maintenance fixes. For current behavior, use the [software operation guide](../software-operation-guide.md); in particular, hardware emergency stop/reset and complete photo restoration are not implemented.
+
 The Markdown documents in `docs/` provide a lighter browser-reading path. These Office files remain the richer primary project materials.
 
 They were created for a team competition project and retain team authorship. Their inclusion here supports project review and attribution; it does not by itself grant a blanket reuse license. See [../../LICENSE_SCOPE.md](../../LICENSE_SCOPE.md).

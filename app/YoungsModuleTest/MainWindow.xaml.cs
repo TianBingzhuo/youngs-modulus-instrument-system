@@ -23,6 +23,8 @@ namespace YoungsModuleTest
     public sealed partial class MainWindow : Window
     {
         private bool isEmergencyStopped = false;
+        private bool _closing;
+        private bool _readyToClose;
 
         public MainWindow()
         {
@@ -33,6 +35,24 @@ namespace YoungsModuleTest
             // 默认导航到首页
             ContentFrame.Navigate(typeof(HomePage));
             MainNavigationView.SelectedItem = MainNavigationView.MenuItems[0];
+            AppWindow.Closing += async (_, args) =>
+            {
+                if (_readyToClose) return;
+                args.Cancel = true;
+                if (_closing) return;
+                _closing = true;
+                MainNavigationView.IsEnabled = false;
+                EmergencyStopButton.IsEnabled = false;
+                try
+                {
+                    if (ContentFrame.Content is ExperimentPage page) await page.ShutdownAsync();
+                }
+                finally
+                {
+                    _readyToClose = true;
+                    Close();
+                }
+            };
         }
 
         private void NavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -40,7 +60,7 @@ namespace YoungsModuleTest
             var selectedItem = args.SelectedItem as NavigationViewItem;
             if (selectedItem != null)
             {
-                string tag = selectedItem.Tag.ToString();
+                string tag = selectedItem.Tag?.ToString() ?? "Home";
                 Type pageType = tag switch
                 {
                     "Home" => typeof(HomePage),
@@ -52,67 +72,36 @@ namespace YoungsModuleTest
                     _ => typeof(HomePage)
                 };
 
-                ContentFrame.Navigate(pageType);
+                if (ContentFrame.CurrentSourcePageType != pageType) ContentFrame.Navigate(pageType);
             }
         }
 
-        private void EmergencyStopButton_Click(object sender, RoutedEventArgs e)
+        private async void EmergencyStopButton_Click(object sender, RoutedEventArgs e)
         {
+            EmergencyStopButton.IsEnabled = false;
             isEmergencyStopped = !isEmergencyStopped;
-
-            if (isEmergencyStopped)
+            try
             {
-                // 强制停机状态
-                PowerIcon.Foreground = new SolidColorBrush(Colors.White);
-                EmergencyStopButton.Background = new SolidColorBrush(Colors.Red);
-                EmergencyStopButton.BorderBrush = new SolidColorBrush(Colors.DarkRed);
-
-                // 实现程序停止接口
-                StopAllOperations();
-
-                // 通知实验页面处理急停状态
-                NotifyExperimentPageEmergencyStop(true);
+                PowerIcon.Foreground = new SolidColorBrush(isEmergencyStopped ? Colors.White : Colors.Black);
+                EmergencyStopButton.Background = new SolidColorBrush(isEmergencyStopped ? Colors.Red : Colors.Transparent);
+                ToolTipService.SetToolTip(EmergencyStopButton, isEmergencyStopped
+                    ? "解除软件采集锁定（不执行硬件复位）"
+                    : "停止并锁定软件采集（不替代实体急停）");
+                if (isEmergencyStopped) StopAllOperations();
+                else ResetInstrument();
+                if (ContentFrame.Content is ExperimentPage page) await page.HandleEmergencyStopAsync();
             }
-            else
-            {
-                // 恢复正常状态
-                var systemBrush = Application.Current.Resources["SystemControlForegroundBaseHighBrush"] as SolidColorBrush;
-                PowerIcon.Foreground = systemBrush ?? new SolidColorBrush(Colors.Black);
-                EmergencyStopButton.Background = new SolidColorBrush(Colors.Transparent);
-
-                var borderBrush = Application.Current.Resources["SystemControlForegroundBaseMediumLowBrush"] as SolidColorBrush;
-                EmergencyStopButton.BorderBrush = borderBrush ?? new SolidColorBrush(Colors.Gray);
-
-                // 实现仪器复位接口
-                ResetInstrument();
-
-                // 通知实验页面处理急停状态
-                NotifyExperimentPageEmergencyStop(false);
-            }
+            finally { EmergencyStopButton.IsEnabled = !_closing; }
         }
 
         private void StopAllOperations()
         {
-            // TODO: 实现停止所有正在运行的程序的接口
-            // 例如：停止摄像头、停止数据采集等
+            // Reserved for a verified hardware stop protocol. No actuator command is implemented.
         }
 
         private void ResetInstrument()
         {
-            // TODO: 实现仪器复位接口
-            // 例如：重新初始化传感器、重置摄像头等
-        }
-
-        private void NotifyExperimentPageEmergencyStop(bool isEmergencyStopped)
-        {
-            // 如果当前页面是实验页面，直接通知
-            if (ContentFrame.Content is ExperimentPage experimentPage)
-            {
-                experimentPage.HandleEmergencyStop(isEmergencyStopped);
-            }
-
-            // 注意：当用户切换到其他页面再回到实验页面时，
-            // 实验页面会在OnNavigatedTo中检查急停状态
+            // Reserved for a verified hardware reset protocol. Unlocking does not reset hardware.
         }
 
         public bool IsEmergencyStopped => isEmergencyStopped;

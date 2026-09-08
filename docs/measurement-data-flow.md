@@ -1,141 +1,66 @@
 # Measurement Data Flow
 
-This document walks through how the instrument software turns CCD and experiment inputs into usable Young's modulus records. It's based on the original operation guide and report.
+This page describes the data handled by the current C# application. It separates a CCD frame, a measurement point and a saved experiment record: they are not interchangeable files.
 
-## Inputs
-
-The experiment page brings together several data sources:
-
-- applied load entered by the operator;
-- CCD intensity data received through the selected serial port;
-- camera preview for observing the instrument state;
-- wire parameters: diameter, original length, and CCD-to-wire scale factor;
-- experiment-state information such as current force, recorded points, and emergency-stop state.
-
-## CCD Acquisition And Curve Quality
-
-The operation guide describes a practical CCD adjustment loop that we found really helpful during actual experiments:
-
-1. Refresh the serial-port list.
-2. Select the port used by the CCD module.
-3. Start CCD acquisition and observe the real-time intensity curve.
-4. If the curve bottom touches the chart boundary, reduce integration time.
-5. If the upper/lower contrast is unclear, increase integration time.
-6. Record data only after the optical feature is stable enough.
-
-This gives the operator direct feedback before any data is written into the measurement record -- which saved us from recording a lot of garbage data early on.
-
-## Feature Extraction
+## From Bytes to Optical Width
 
 ```text
-CCD byte stream
-  -> numeric intensity samples
-  -> smoothing / boundary search
-  -> optical feature width or boundary position
-  -> deformation estimate through CCD scale factor
+serial response
+  -> 3648 unsigned intensity bytes
+  -> centered moving average
+  -> dark-region threshold and two boundaries
+  -> pixel width * 8 micrometres / 1000
+  -> optical width in millimetres
 ```
 
-The project software keeps this process visible through the live curve. The goal isn't just to compute a final number; it's to let the user judge whether the acquisition state looks reasonable before committing to a measurement.
+The receive buffer holds at most four frames (14,592 bytes). Overflow is treated as an acquisition fault, not silently trimmed into a new frame. This limit is a software memory bound, not a statement about the vendor's packet format.
 
-## Measurement Record
+The original rule uses the second and penultimate samples below a two-stage threshold. It does not fit a bright peak. The full rule, including fallbacks and its limitations, is in [C# pseudocode](csharp-implementation-pseudocode.md).
 
-For every recorded point, the application stores:
+## Measurement Points
 
-- applied force;
-- CCD-derived length/deformation value;
-- current wire and scale parameters;
-- experiment record information for later recovery/export.
+`MeasurementRecord` contains:
 
-After at least two records are collected, the software estimates Young's modulus with least-squares fitting and reports fitting quality. This supports the teaching goal by showing how each additional measurement point affects the fitted result, rather than reducing the experiment to a single formula substitution.
+| Field | Meaning |
+|---|---|
+| `SerialNumber` | Position in the current measurement list. |
+| `AppliedForce` | Operator-entered load in kg, despite the historical field name. |
+| `IlluminatedLength` | Detected dark-region width in mm, despite the historical field name. |
+| `Timestamp`, `MaterialType` | Capture time and material label. |
+| `LeftBoundary`, `RightBoundary` | Pixel indices. |
+| `PixelLength` | Absolute boundary separation. |
+| `ActualLength` | Duplicate optical width in this record format; not automatically the wire elongation. |
 
-## Export And Import
+Wire diameter, effective wire length and the CCD-to-wire ratio are kept in application settings. They are **not independently stored with every measurement point**. Re-analysis of an old record therefore requires checking the current settings against the experiment notes.
 
-The software supports:
+## Fitting
 
-- exporting experiment images;
-- exporting CCD raw data;
-- exporting experiment records;
-- importing historical data to recover previous results.
+The code sorts retained points by load, subtracts the first point as a baseline, converts load differences to N and optical-width differences to estimated wire deformation in m, then calculates a least-squares slope.
 
-This makes the application useful not just for live measurement, but also for report writing, review, and teaching demonstrations.
+The result is converted to GPa using the configured wire length and cross-sectional area. The original sign convention takes an absolute value, and the original IQR filtering is retained. These choices do not establish that a noisy or misaligned experiment is valid.
 
-## Hardware-Independent Simulations
+The calculation can update `ExperimentRecord.YoungsModulus` internally. Numerical result display remains disabled in this edition. A public repository without measurement datasets does not mean the running application never stores a user's calculated values.
 
-The scripts in `simulations/` are small standalone demos we wrote for public explanation and hardware-free inspection:
+## Saved Experiments
 
-- `simulated_ccd_reader.py`: generates CCD-like data and finds a synthetic peak.
-- `uncertainty_budget.py`: computes a Young's modulus value and a simple uncertainty interval.
+`experiment_records.json` is a UTF-8 JSON array in the application's local data folder. Measurement lists are serialized inside the `measurementData` string, preserving the historical schema. Records are still matched by name; new names include a timestamp and random suffix to avoid same-second collisions.
 
-They do not replace the original WinUI 3 / C# application or the physical instrument. The original application logic is under `app/YoungsModuleTest/`; the Python files only preserve the data-processing idea in a lighter simulation form.
+File reads and writes are limited to 32 MiB. Both pages use a process-local lock and same-directory temporary-file replacement. Invalid JSON is reported and left in place. This is not a database, a cross-process lock, or a guarantee against power-loss corruption.
 
----
+The unused `SaveCompleteExperimentData()` method shows an intended fuller record format. Its photo encoder is unfinished, so its fields should not be read as proof of complete snapshot persistence.
 
-# 中文版本
+## Import and Export
 
-本文件介绍仪器软件如何把 CCD 和实验输入变成可用的杨氏模量记录。内容来自原始操作说明和报告。
+CCD CSV uses the header `pixelIndex,intensity` or `像素索引,光强度`. It has exactly 3648 data rows, ordered indices 0..3647 and integer intensities 0..255. UTF-8 BOM and CRLF are accepted. Validation completes before the displayed frame changes.
 
-## 输入
+The TXT report contains the current measurement rows and interface text. It is not a complete restorable archive. Photographs are saved separately as JPEG files in the Windows Pictures library.
 
-实验页面整合了多个数据来源：
+## Later Python Examples
 
-- 操作员输入的施加载荷；
-- 通过选定串口接收的 CCD 光强数据；
-- 摄像头预览，用于观察仪器状态；
-- 钢丝参数：直径、原长和 CCD 到钢丝的比例系数；
-- 实验状态信息，如当前施加力、已记录的数据点和紧急停机状态。
+`simulated_ccd_reader.py` now follows the C# dark-region rule on synthetic 8-bit data. A flat input can still produce a width under the historical rule; the application rejects a flat frame when recording a measurement. A detected width alone is not a quality certificate.
 
-## CCD 采集与曲线质量
+`uncertainty_budget.py` is an independent single-point formula and first-order propagation example. It assumes independent input uncertainties and uses k=2 for expanded uncertainty. It does not reproduce the C# multi-point fit, infer a confidence level, or represent a measured result.
 
-操作说明里描述了一个实用的 CCD 调节循环，实际做实验时这套流程帮了大忙：
+## 中文摘要
 
-1. 刷新串口列表。
-2. 选择 CCD 模块使用的串口。
-3. 启动 CCD 采集，观察实时光强曲线。
-4. 如果曲线底部已经贴到图表边界，就减小积分时间。
-5. 如果上下对比度不明显，就增大积分时间。
-6. 等光学特征稳定后再记录数据。
-
-这样操作员在数据写入测量记录之前就能直观判断——这帮我们省了不少废数据。
-
-## 特征提取
-
-```text
-CCD byte stream
-  -> numeric intensity samples
-  -> smoothing / boundary search
-  -> optical feature width or boundary position
-  -> deformation estimate through CCD scale factor
-```
-
-项目软件通过实时曲线让这个过程始终可见。目的不只是算出最终数字，更是让用户在正式记录前能判断采集状态是否合理。
-
-## 测量记录
-
-每记录一个数据点，程序会保存：
-
-- 施加力；
-- CCD 推导的长度/形变值；
-- 当前的钢丝和比例参数；
-- 实验记录信息，便于后续恢复/导出。
-
-收集到至少两组数据后，软件会用最小二乘法估算杨氏模量并报告拟合质量。这与教学目标一致：学生可以观察每个新增测量点对拟合结果的影响，而不是只完成一次公式代入。
-
-## 导出与导入
-
-软件支持：
-
-- 导出实验图片；
-- 导出 CCD 原始数据；
-- 导出实验记录；
-- 导入历史数据以恢复之前的结果。
-
-这让应用不仅适用于现场测量，也能用来写报告、回顾数据和做教学演示。
-
-## 不依赖硬件的仿真
-
-`simulations/` 下的脚本是我们为公开展示和无硬件体验写的小演示程序：
-
-- `simulated_ccd_reader.py`：生成类似 CCD 的数据并找到合成峰值。
-- `uncertainty_budget.py`：计算杨氏模量值和简单的不确定度区间。
-
-它们不能替代原始的 WinUI 3 / C# 应用或物理仪器。原始程序逻辑在 `app/YoungsModuleTest/` 下；Python 文件只是用更轻量的仿真形式保留了数据处理的思路。
+CCD CSV 是一帧波形，测量记录是一组“载荷和光学宽度”，JSON 才是首页保存的实验列表。导入 CSV 不等于恢复完整实验。钢丝参数目前仍是应用级设置，照片单独保存；使用旧记录时必须重新核对参数。计算示例里的数字全部是合成输入，不作为仪器精度或比赛结果。

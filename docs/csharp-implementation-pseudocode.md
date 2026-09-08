@@ -1,647 +1,260 @@
 # C# Implementation Pseudocode
 
-This document summarizes the original WinUI 3 / C# application under `app/YoungsModuleTest/`. It isn't meant to replace the source code -- think of it more as a map of the engineering flow behind the UI, serial CCD acquisition, measurement records, fitting, import/export, and emergency stop logic. I wrote this so someone reading on GitHub can understand what the program does without having to open Visual Studio first.
+This is a source map for the maintained WinUI application, not a replacement implementation. The baseline published source is preserved at `original-source-snapshot-2026-09-08` (commit `3a8a006`). The low-valley and fitting rules below come from that source; lifecycle and file-handling changes are listed in [maintenance notes](maintenance.md).
 
-The Python files under `simulations/` are later hardware-independent demos. The original application is the C# project.
+The original C# application is under `app/YoungsModuleTest/`. Python files in `simulations/` are later examples.
 
-## Main Window And Navigation
+## Navigation and Page Lifetime
 
 ```text
-on MainWindow startup:
-  initialize WinUI shell
-  navigate ContentFrame to HomePage
-  select Home navigation item
+MainWindow:
+  navigate to HomePage
+  hold the global software-lock flag
 
-on navigation item changed:
-  map item tag to page type
-    Home -> HomePage
-    Theory -> TheoryPage
-    Experiment -> ExperimentPage
-    Calibration -> CalibrationPage
-    SystemCheck -> SystemCheckPage
-    Settings -> SettingsPage
-  navigate ContentFrame to selected page
+on navigation selection:
+  resolve the page type
+  navigate only if this is not already the current page
+  # opening a saved record must not be followed by a second empty navigation
 
-on emergency stop button clicked:
-  toggle global emergency_stop flag
+on ExperimentPage entry:
+  mark page active
+  apply the global software-lock state
+  restore the supplied record, if present
+  enumerate cameras and serial ports
 
-  if emergency_stop is true:
-    paint stop button red
-    call StopAllOperations()
-    notify current ExperimentPage, if loaded
+on ExperimentPage exit:
+  mark page inactive
+  stop and await CCD collection
+  detach serial callback, close and dispose port
+  clean up camera resources
+
+on window close:
+  defer close
+  clean up the current experiment page
+  close once cleanup has returned
+```
+
+The camera has a separate lifetime from CCD polling. Camera initialization, capture and cleanup are serialized so leaving the page during initialization does not leave a newly initialized camera running.
+
+## Software Stop
+
+```text
+on title-bar stop button:
+  temporarily disable the button while changing state
+  toggle the global software-lock flag
+
+  if locked:
+    call StopAllOperations()       # reserved hook; NO hardware command
+    disable Start, Record and CSV Import
+    cancel and await CCD polling
+    discard buffered input and invalidate queued frame updates
   else:
-    restore button style
-    call ResetInstrument()
-    notify current ExperimentPage, if loaded
+    call ResetInstrument()         # reserved hook; NO hardware command
+    permit an explicit new Start
+    do not automatically restart collection
+
+  update the button and status text
 ```
 
-## Experiment Page Startup
+This does not remove power, unload the wire or reset the device. An in-flight serial write may complete or time out before the polling task ends. The camera can remain available for observation. A physical emergency stop must not depend on this event handler.
+
+## Serial Acquisition
 
 ```text
-on ExperimentPage constructed:
-  initialize components
-  initialize CCD state, measurement lists, camera lists, and wire parameters
+on port selection, under connection gate:
+  clean up the previous port and collection task
+  return if the page has already been left
+  open SerialPort(port, 921600, parity=None, dataBits=8, stopBits=1)
+  set read and write timeouts to 1000 ms
+  attach DataReceived callback
+  mark connected
 
-on page loaded / navigated to:
-  check global emergency-stop state from MainWindow
-  load available cameras
-  load available serial ports
-  load saved wire parameters
+on integration-time selection:
+  parse the hexadecimal command tag
+  remember it for the next Start; do not write to the port immediately
 
-  if a saved experiment record is passed by navigation:
-    load material type
-    restore measurement records
-    restore CCD data and boundary markers
-    restore captured photos
-    restore integration time, serial port, and camera metadata when available
+on Start, under collection gate:
+  require active page, connected port, no software lock and no input fault
+  return if already collecting
+  discard pending serial input and clear the frame buffer
+  create a cancellation source and new acquisition generation
+  keep a reference to the background task
+
+background task:
+  send selected integration-time command
+  repeat until cancelled:
+    send 0xA2
+    wait 100 ms with cancellation
+    process one complete buffered frame, if available
+    wait 200 ms with cancellation
+
+on DataReceived, under port lock:
+  ignore callbacks from an old port or inactive collection
+  reject available input larger than buffer capacity
+  read available bytes
+  append only the number of bytes actually returned by Read()
+  if read fails or buffer overflows:
+    cancel collection and enqueue a fault notification
 ```
 
-## Serial CCD Acquisition
+The buffer limit is `4 * 3648` bytes. Each frame is taken in byte order. There is no frame header or checksum parser, and no verified resynchronization algorithm for lost bytes.
+
+Fault notifications are tagged with the acquisition generation, so a delayed failure from one run does not close a newer connection.
+
+## Frame Dispatch
 
 ```text
-load serial ports:
-  run SerialPort.GetPortNames() off the UI thread
-  dispatch back to UI:
-    clear serial-port ComboBox
-    if none found:
-      show "no serial device"
-    else:
-      fill ComboBox and ask user to select a port
+take one 3648-byte frame from the buffer
+if no complete frame exists: return
+if a frame update is already queued: discard this display update
 
-on serial port selected:
-  show "connecting"
-  cleanup previous serial port
-  create SerialPort(port, 921600 baud, no parity, 8 data bits, 1 stop bit)
-  attach DataReceived handler
-  open serial port
-  send current integration-time command
-  mark CCD as connected
-
-on integration-time selection changed:
-  parse item tag as hex command
-  store command as current integration time
-  if CCD is connected:
-    send command to serial port
-
-on DataReceived event:
-  mark receiveDataFlag = true
-  read all available bytes
-  lock shared data buffer
-  append bytes into buffer
-  mark receiveDataFlag = false
+queue at most one UI update:
+  require active page, collecting state, no software lock
+  require the same acquisition generation
+  create CCDDataPoint(index, intensity) for every sample
+  replace the current frame
+  analyze boundaries
+  redraw curve and boundary markers
+  update statistics
 ```
 
-## CCD Frame Processing
+Dropping a display update limits UI backlog; it is not archival acquisition. This application does not retain every received frame.
+
+## Dark-Region Detection
+
+The code finds a low-intensity region, not a bright peak. Names such as `IlluminatedLength` are historical and refer here to the detected dark-region width.
 
 ```text
-on Start CCD:
-  require serial port connected
-  if already collecting: return
-  set isCollecting = true
-  disable Start button, enable Stop button
-  create CancellationTokenSource
-  start background ProcessCCDDataLoop()
+N = number of intensity samples
 
-ProcessCCDDataLoop:
-  while collecting and not cancelled:
-    if serial port is open:
-      send 0xA2 to request CCD frame
-      wait 100 ms
-      ProcessBufferedData()
-      wait 200 ms
+for i in 0..N-1:
+  smoothed[i] = mean(intensity[max(0, i-5)..min(N-1, i+5)])
+  # inclusive endpoints: up to 11 samples
 
-ProcessBufferedData:
-  lock shared data buffer
-  if buffer has fewer than 3648 bytes:
-    return
-  take first 3648 bytes as one CCD frame
-  remove those bytes from buffer
+firstAverage = mean(smoothed)
+belowAverage = values in smoothed that are <= firstAverage
+secondAverage = mean(belowAverage)
+threshold = secondAverage + 5
 
-  convert each byte to CCDDataPoint:
-    PixelIndex = index
-    Intensity = byte value
+low = indices whose smoothed value <= threshold
 
-  dispatch to UI thread:
-    replace current CCD data
-    AnalyzeBoundaryPoints()
-    UpdateCCDChart()
-    UpdateStatistics()
+if low has at least 4 indices:
+  left, right = low[1], low[-2]
+else if low has 2 or 3 indices:
+  left, right = low[0], low[-1]
+else:
+  minimum = first index with the minimum smoothed value
+  left = max(0, minimum - 100)
+  right = min(N - 1, minimum + 100)
+
+if left >= right:
+  center = floor(N / 2)
+  left = max(0, center - 50)
+  right = min(N - 1, center + 50)
+
+widthPixels = abs(right - left)
+widthMm = widthPixels * 8.0 / 1000
 ```
 
-## Boundary Detection
+`SmoothData(intensities, 10)` does **not** mean a ten-sample window: the original inclusive loop uses up to eleven samples. The offset is **+5**, despite an old comment that said +10.
 
-This is probably the most interesting algorithm in the whole program. It's not fancy, but it works for the CCD signal shape we were dealing with.
+This rule can span disconnected low regions and returns a wide region even for a flat frame. Those behaviors are retained so the algorithm remains traceable. The maintained recording handler rejects frames without any intensity variation; it does not certify other frames as optically valid.
+
+## Statistics and Measurement Records
 
 ```text
-AnalyzeBoundaryPoints:
-  if no CCD data: return
+max, min, mean = statistics of the raw frame
+contrastPercent = 0 if max + min == 0
+                  else 100.0 * (max - min) / (max + min)
 
-  intensities = current frame intensity array
-  smoothed = moving_average(intensities, window = 10)
-
-  firstAverage = average(smoothed)
-  belowAverageValues = all values <= firstAverage
-  secondAverage = average(belowAverageValues)
-  threshold = secondAverage + 5
-
-  lowValleyIndices = all indices where smoothed[index] <= threshold
-
-  if lowValleyIndices has at least 4 points:
-    leftBoundary = second low-valley index
-    rightBoundary = second-to-last low-valley index
-  else if lowValleyIndices has 2 or 3 points:
-    leftBoundary = first low-valley index
-    rightBoundary = last low-valley index
-  else:
-    minIndex = index of minimum smoothed value
-    leftBoundary = max(0, minIndex - 100)
-    rightBoundary = min(lastIndex, minIndex + 100)
-
-  if leftBoundary >= rightBoundary:
-    center = frame length / 2
-    leftBoundary = max(0, center - 50)
-    rightBoundary = min(lastIndex, center + 50)
-
-  illuminatedPixels = abs(rightBoundary - leftBoundary)
-  illuminatedLengthMm = illuminatedPixels * 8 um / 1000
+on Record:
+  require active page, no software lock, no input fault, no save in progress
+  require a finite nonnegative load in kg
+  require a full non-flat frame and a finite positive width
+  append load, width, timestamp, material, boundaries and pixel separation
+  create or update the experiment record
+  report success only after saving returns successfully
+  on failure, retain in-memory data and display an unsaved warning
 ```
 
-## Chart And Status Update
+The frame supplies optical width, not wire elongation directly. Geometry and calibration enter the subsequent fit.
+
+## Least-Squares Calculation
 
 ```text
-UpdateCCDChart:
-  clear Canvas
-  compute chart bounds and intensity range
-  draw grid lines
-  draw X/Y axes
-  draw red intensity curve over 3648 pixels
-  draw green boundary markers
-  fill the detected low-valley region with translucent color
+require at least 2 measurements
 
-UpdateStatistics:
-  compute max, min, average intensity
-  show boundary positions
-  compute average intensity inside low-valley region
-  compute contrast = (max - min) / (max + min)
-  show current illuminated length
+if there are at least 4 measurements:
+  lengths = sorted optical widths
+  Q1 = lengths[floor(N / 4)]
+  Q3 = lengths[floor(3 * N / 4)]
+  IQR = Q3 - Q1
+  keep widths within [Q1 - 1.5 * IQR, Q3 + 1.5 * IQR]
+
+require at least 2 retained measurements
+sort retained measurements by load
+baseWidth, baseLoad = first measurement
+
+for each retained point:
+  x = (widthMm - baseWidth) * ccdToWireRatio / 1000   # metres
+  y = (loadKg - baseLoad) * 9.8                      # newtons
+
+D = N * sum(x*x) - sum(x)^2
+if abs(D) < 1e-10: return no result
+slope = (N * sum(x*y) - sum(x)*sum(y)) / D
+
+wireLengthM = configuredWireLengthMm / 1000
+wireDiameterM = configuredWireDiameterMm / 1000
+area = pi * (wireDiameterM / 2)^2
+return abs(slope * wireLengthM / area / 1e9)         # GPa
 ```
 
-## Measurement Records
+The maintenance version uses the configured wire length instead of the former hard-coded 0.530 m. The original IQR indexing, denominator cutoff and absolute-value convention are otherwise retained. They require review before generalizing the instrument to other measurement ranges.
+
+`CalculateYoungsModulus()` still calls the calculation, but the assignments to numerical result labels are commented out. `UpdateExperimentRecord()` can store a finite result internally. The correlation function uses retained load/width pairs and returns squared correlation; it is not an uncertainty estimate.
+
+## Persistence and File Operations
 
 ```text
-on Record Data:
-  require applied force input
-  require current CCD illuminated length > 0
+save record, under the shared process-local record gate:
+  read existing file as bounded UTF-8 (maximum 32 MiB)
+  require a JSON array with non-null records
+  replace the matching record name or append a new one
+  serialize the complete array before touching the destination
+  write and flush a temporary file in the same directory
+  replace the destination
+  clean up the temporary file on failure
 
-  create MeasurementRecord:
-    serial number
-    applied force
-    illuminated length
-    timestamp
-    material type
-    left/right CCD boundary
-    pixel length
-    actual length
+delete from homepage:
+  ask the user to confirm
+  acquire the same gate and read the current file
+  remove the requested records and save
+  update the homepage only after success
 
-  append record to measurement list
-  refresh measurement ListView
+import CCD CSV:
+  require idle, unlocked acquisition
+  read at most 128 KiB
+  validate UTF-8, header, exactly 3648 rows, sequential indices and byte values
+  re-check state after asynchronous reading
+  replace the displayed frame only after validation
 
-  if this is the first point and no current experiment record exists:
-    create a new ExperimentRecord
-  else:
-    update the current ExperimentRecord
+export CCD CSV:
+  write current frame indices and intensities
 
-  calculate Young's modulus internally
-  show "recorded data point"
+export TXT report:
+  write current measurement rows and interface text
 ```
 
-## Young's Modulus Calculation
+The format is still the original local JSON schema, not a database. The shared gate does not coordinate multiple independent application instances.
 
-```text
-CalculateByLeastSquares:
-  require at least 2 measurement records
+## Unfinished Snapshot Code
 
-  cleanedData = RemoveOutliers(records)
-  require at least 2 cleaned records
+`SaveCompleteExperimentData()` is not called by the recording workflow. `ConvertBitmapToBase64()` returns an empty string. The record schema has fields for CCD data, photos and device settings, but this is not a working end-to-end snapshot feature.
 
-  sort records by applied force
-  baseLength = first record illuminated length
-  baseForce = first record applied force
+Photographs captured through the interface are saved separately as JPEG files. Importing CCD CSV does not restore those photographs, a measurement series or per-experiment calibration.
 
-  wireLengthM = 0.530
-  wireDiameterM = wireDiameterMm / 1000
-  wireArea = pi * (wireDiameterM / 2)^2
+## 中文导读
 
-  for each sorted record:
-    shadowLengthChangeMm = record.illuminatedLength - baseLength
-    actualDeformationM = shadowLengthChangeMm * ccdToWireRatio / 1000
-    forceChangeN = (record.appliedForce - baseForce) * 9.8
-    add actualDeformationM to deltaLengths
-    add forceChangeN to deltaForces
+这份伪代码沿着实际调用顺序描述程序，而不把预留接口写成已实现功能。重点是串口事件与 UI 分开、完整帧处理、暗区边界可视化、载荷与宽度记录，以及随后进行的拟合。
 
-  slope = least_squares_slope(x = deltaLengths, y = deltaForces)
-  if denominator is too small:
-    return null
-
-  youngsModulusPa = slope * wireLengthM / wireArea
-  return abs(youngsModulusPa / 1e9) as GPa
-
-RemoveOutliers:
-  if fewer than 4 records:
-    return original records
-  compute Q1, Q3, and IQR over illuminated length
-  keep only records within [Q1 - 1.5 IQR, Q3 + 1.5 IQR]
-```
-
-## Persistence, Import, And Export
-
-```text
-CreateNewExperimentRecord:
-  create record name with timestamp
-  store material type, measurement count, serialized measurements
-  save to ApplicationData.Current.LocalFolder / experiment_records.json
-
-UpdateExperimentRecord:
-  update description, material, count, serialized measurements
-  calculate and store Young's modulus when available
-  save back into experiment_records.json
-
-SaveCompleteExperimentData:
-  serialize current CCD data
-  save left/right boundaries
-  encode captured photos as Base64
-  save integration time, serial port, camera name
-  save CCD statistics and current illuminated length
-
-ExportCCDDataToCSV:
-  write "pixel index, intensity" rows for the current CCD frame
-
-ExportExperimentReport:
-  write material, fitting fields, integration time, measurement rows, CCD statistics, and current result text
-
-ImportCCDDataFromCSV:
-  parse CSV rows into CCDDataPoint objects
-  AnalyzeBoundaryPoints()
-  UpdateCCDChart()
-  UpdateStatistics()
-```
-
-## Home Page Record Manager
-
-```text
-on HomePage startup:
-  initialize quick-access module cards
-  load experiment_records.json from local app data
-  if no record exists:
-    show a sample record
-
-on quick-access card clicked:
-  find matching NavigationView item in MainWindow
-  switch selected navigation item
-
-on open record:
-  navigate to ExperimentPage and pass selected ExperimentRecord
-
-on delete / clear records:
-  ask for confirmation
-  update in-memory collection
-  save experiment_records.json
-```
-
-## What The Pseudocode Should Preserve
-
-The important point isn't just "CCD data enters and a modulus comes out." The C# program is built around a live instrument workflow, and that context matters:
-
-- hardware data comes in asynchronously through a serial event;
-- the UI thread is updated through dispatcher callbacks;
-- a complete CCD frame is treated as 3648 intensity samples;
-- the optical low-valley region is made visible, not hidden as a black-box number;
-- each measurement records the applied load, optical width, boundaries, timestamp, and material context;
-- fitting is repeated as more points are recorded;
-- local records, CCD raw data, photos, and parameters can be restored or exported;
-- emergency stop is global and page-aware, so the instrument can enter and exit an abnormal state cleanly.
-
----
-
-# 中文版本
-
-本文件概述了 `app/YoungsModuleTest/` 下原始 WinUI 3 / C# 应用的逻辑。它不是源码的替代品——更像是一张工程流程图，帮助理解 UI、串口 CCD 采集、测量记录、拟合、导入导出和紧急停机背后的思路。写这个是为了让大家在 GitHub 上就能理解程序在做什么，不必打开 Visual Studio。
-
-`simulations/` 下的 Python 文件是后来写的不依赖硬件的演示程序。原始应用是 C# 项目。
-
-## 主窗口与导航
-
-```text
-on MainWindow startup:
-  initialize WinUI shell
-  navigate ContentFrame to HomePage
-  select Home navigation item
-
-on navigation item changed:
-  map item tag to page type
-    Home -> HomePage
-    Theory -> TheoryPage
-    Experiment -> ExperimentPage
-    Calibration -> CalibrationPage
-    SystemCheck -> SystemCheckPage
-    Settings -> SettingsPage
-  navigate ContentFrame to selected page
-
-on emergency stop button clicked:
-  toggle global emergency_stop flag
-
-  if emergency_stop is true:
-    paint stop button red
-    call StopAllOperations()
-    notify current ExperimentPage, if loaded
-  else:
-    restore button style
-    call ResetInstrument()
-    notify current ExperimentPage, if loaded
-```
-
-## 实验页面启动
-
-```text
-on ExperimentPage constructed:
-  initialize components
-  initialize CCD state, measurement lists, camera lists, and wire parameters
-
-on page loaded / navigated to:
-  check global emergency-stop state from MainWindow
-  load available cameras
-  load available serial ports
-  load saved wire parameters
-
-  if a saved experiment record is passed by navigation:
-    load material type
-    restore measurement records
-    restore CCD data and boundary markers
-    restore captured photos
-    restore integration time, serial port, and camera metadata when available
-```
-
-## 串口 CCD 采集
-
-```text
-load serial ports:
-  run SerialPort.GetPortNames() off the UI thread
-  dispatch back to UI:
-    clear serial-port ComboBox
-    if none found:
-      show "no serial device"
-    else:
-      fill ComboBox and ask user to select a port
-
-on serial port selected:
-  show "connecting"
-  cleanup previous serial port
-  create SerialPort(port, 921600 baud, no parity, 8 data bits, 1 stop bit)
-  attach DataReceived handler
-  open serial port
-  send current integration-time command
-  mark CCD as connected
-
-on integration-time selection changed:
-  parse item tag as hex command
-  store command as current integration time
-  if CCD is connected:
-    send command to serial port
-
-on DataReceived event:
-  mark receiveDataFlag = true
-  read all available bytes
-  lock shared data buffer
-  append bytes into buffer
-  mark receiveDataFlag = false
-```
-
-## CCD 帧处理
-
-```text
-on Start CCD:
-  require serial port connected
-  if already collecting: return
-  set isCollecting = true
-  disable Start button, enable Stop button
-  create CancellationTokenSource
-  start background ProcessCCDDataLoop()
-
-ProcessCCDDataLoop:
-  while collecting and not cancelled:
-    if serial port is open:
-      send 0xA2 to request CCD frame
-      wait 100 ms
-      ProcessBufferedData()
-      wait 200 ms
-
-ProcessBufferedData:
-  lock shared data buffer
-  if buffer has fewer than 3648 bytes:
-    return
-  take first 3648 bytes as one CCD frame
-  remove those bytes from buffer
-
-  convert each byte to CCDDataPoint:
-    PixelIndex = index
-    Intensity = byte value
-
-  dispatch to UI thread:
-    replace current CCD data
-    AnalyzeBoundaryPoints()
-    UpdateCCDChart()
-    UpdateStatistics()
-```
-
-## 边界检测
-
-这可能是整个程序里最有意思的算法部分。方法不算复杂，但对我们面对的 CCD 信号形态确实好用。
-
-```text
-AnalyzeBoundaryPoints:
-  if no CCD data: return
-
-  intensities = current frame intensity array
-  smoothed = moving_average(intensities, window = 10)
-
-  firstAverage = average(smoothed)
-  belowAverageValues = all values <= firstAverage
-  secondAverage = average(belowAverageValues)
-  threshold = secondAverage + 5
-
-  lowValleyIndices = all indices where smoothed[index] <= threshold
-
-  if lowValleyIndices has at least 4 points:
-    leftBoundary = second low-valley index
-    rightBoundary = second-to-last low-valley index
-  else if lowValleyIndices has 2 or 3 points:
-    leftBoundary = first low-valley index
-    rightBoundary = last low-valley index
-  else:
-    minIndex = index of minimum smoothed value
-    leftBoundary = max(0, minIndex - 100)
-    rightBoundary = min(lastIndex, minIndex + 100)
-
-  if leftBoundary >= rightBoundary:
-    center = frame length / 2
-    leftBoundary = max(0, center - 50)
-    rightBoundary = min(lastIndex, center + 50)
-
-  illuminatedPixels = abs(rightBoundary - leftBoundary)
-  illuminatedLengthMm = illuminatedPixels * 8 um / 1000
-```
-
-## 图表与状态更新
-
-```text
-UpdateCCDChart:
-  clear Canvas
-  compute chart bounds and intensity range
-  draw grid lines
-  draw X/Y axes
-  draw red intensity curve over 3648 pixels
-  draw green boundary markers
-  fill the detected low-valley region with translucent color
-
-UpdateStatistics:
-  compute max, min, average intensity
-  show boundary positions
-  compute average intensity inside low-valley region
-  compute contrast = (max - min) / (max + min)
-  show current illuminated length
-```
-
-## 测量记录
-
-```text
-on Record Data:
-  require applied force input
-  require current CCD illuminated length > 0
-
-  create MeasurementRecord:
-    serial number
-    applied force
-    illuminated length
-    timestamp
-    material type
-    left/right CCD boundary
-    pixel length
-    actual length
-
-  append record to measurement list
-  refresh measurement ListView
-
-  if this is the first point and no current experiment record exists:
-    create a new ExperimentRecord
-  else:
-    update the current ExperimentRecord
-
-  calculate Young's modulus internally
-  show "recorded data point"
-```
-
-## 杨氏模量计算
-
-```text
-CalculateByLeastSquares:
-  require at least 2 measurement records
-
-  cleanedData = RemoveOutliers(records)
-  require at least 2 cleaned records
-
-  sort records by applied force
-  baseLength = first record illuminated length
-  baseForce = first record applied force
-
-  wireLengthM = 0.530
-  wireDiameterM = wireDiameterMm / 1000
-  wireArea = pi * (wireDiameterM / 2)^2
-
-  for each sorted record:
-    shadowLengthChangeMm = record.illuminatedLength - baseLength
-    actualDeformationM = shadowLengthChangeMm * ccdToWireRatio / 1000
-    forceChangeN = (record.appliedForce - baseForce) * 9.8
-    add actualDeformationM to deltaLengths
-    add forceChangeN to deltaForces
-
-  slope = least_squares_slope(x = deltaLengths, y = deltaForces)
-  if denominator is too small:
-    return null
-
-  youngsModulusPa = slope * wireLengthM / wireArea
-  return abs(youngsModulusPa / 1e9) as GPa
-
-RemoveOutliers:
-  if fewer than 4 records:
-    return original records
-  compute Q1, Q3, and IQR over illuminated length
-  keep only records within [Q1 - 1.5 IQR, Q3 + 1.5 IQR]
-```
-
-## 持久化、导入与导出
-
-```text
-CreateNewExperimentRecord:
-  create record name with timestamp
-  store material type, measurement count, serialized measurements
-  save to ApplicationData.Current.LocalFolder / experiment_records.json
-
-UpdateExperimentRecord:
-  update description, material, count, serialized measurements
-  calculate and store Young's modulus when available
-  save back into experiment_records.json
-
-SaveCompleteExperimentData:
-  serialize current CCD data
-  save left/right boundaries
-  encode captured photos as Base64
-  save integration time, serial port, camera name
-  save CCD statistics and current illuminated length
-
-ExportCCDDataToCSV:
-  write "pixel index, intensity" rows for the current CCD frame
-
-ExportExperimentReport:
-  write material, fitting fields, integration time, measurement rows, CCD statistics, and current result text
-
-ImportCCDDataFromCSV:
-  parse CSV rows into CCDDataPoint objects
-  AnalyzeBoundaryPoints()
-  UpdateCCDChart()
-  UpdateStatistics()
-```
-
-## 首页记录管理
-
-```text
-on HomePage startup:
-  initialize quick-access module cards
-  load experiment_records.json from local app data
-  if no record exists:
-    show a sample record
-
-on quick-access card clicked:
-  find matching NavigationView item in MainWindow
-  switch selected navigation item
-
-on open record:
-  navigate to ExperimentPage and pass selected ExperimentRecord
-
-on delete / clear records:
-  ask for confirmation
-  update in-memory collection
-  save experiment_records.json
-```
-
-## 伪代码要保留什么
-
-重点不只是"CCD 数据进来、杨氏模量出来"。C# 程序是围绕实际仪器工作流构建的，这个上下文很重要：
-
-- 硬件数据通过串口事件异步进入；
-- UI 线程通过 dispatcher 回调更新；
-- 一帧完整的 CCD 数据是 3648 个光强采样点；
-- 光学低谷区域是可见的，不是藏在黑盒里的一个数字；
-- 每条测量记录保存了施加载荷、光学宽度、边界、时间戳和材料信息；
-- 随着更多数据点的记录，拟合会重复进行；
-- 本地记录、CCD 原始数据、照片和参数都可以恢复或导出；
-- 紧急停机是全局的且能感知当前页面，仪器可以干净地进入和退出异常状态。
+需要特别注意：软件锁定不等于实体急停；kg 输入不等于已经换算的 N；光学宽度不等于钢丝伸长；JSON 有某个字段不等于保存链路已经接通。原始项目文档保留设计意图，当前操作以[操作说明](software-operation-guide.md)为准。

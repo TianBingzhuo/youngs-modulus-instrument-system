@@ -25,6 +25,7 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using Windows.UI;
+using YoungsModuleTest.Maintenance;
 
 namespace YoungsModuleTest.Views
 {
@@ -35,6 +36,7 @@ namespace YoungsModuleTest.Views
         private List<MeasurementRecord> _measurementRecords = new List<MeasurementRecord>();
 
         // 摄像头相关字段
+        private readonly SemaphoreSlim _cameraGate = new(1, 1);
         private MediaFrameSourceGroup? mediaFrameSourceGroup;
         private MediaCapture? mediaCapture;
         private bool _isCameraInitialized = false;
@@ -50,12 +52,19 @@ namespace YoungsModuleTest.Views
         private SerialPort? _serialPort;
         private bool _isCCDConnected = false;
         private bool _isCollecting = false;
-        private Timer? _dataCollectionTimer;
+        private bool _isActive;
+        private bool _inputFault;
+        private bool _isSavingRecord;
+        private readonly object _portGate = new();
+        private readonly SemaphoreSlim _connectionGate = new(1, 1);
+        private readonly SemaphoreSlim _collectionGate = new(1, 1);
+        private Task _collectionTask = Task.CompletedTask;
+        private int _collectionGeneration;
+        private int _frameUpdatePending;
         private byte _currentIntegrationTime = 0xB1; // 默认10μs
 
         // 数据处理相关
-        private List<byte> _dataBuffer = new List<byte>();
-        private bool _receiveDataFlag = false;
+        private readonly CcdFrameBuffer _frames = new();
         private CancellationTokenSource? _cancellationTokenSource;
 
         // 绘图相关
@@ -72,7 +81,7 @@ namespace YoungsModuleTest.Views
         public ExperimentPage()
         {
             this.InitializeComponent();
-            _ = InitializePageAsync();
+            // Device enumeration runs once in OnNavigatedTo.
             _ = LoadWireParameters(); // 这会加载保存的参数，如果没有则使用代码中的默认值
 
             // 监听急停状态
@@ -121,43 +130,36 @@ namespace YoungsModuleTest.Views
             }
         }
 
+        private bool IsSoftwareStopped => App.Current.MainWindow is MainWindow window && window.IsEmergencyStopped;
+
+        private void UpdateAcquisitionControls()
+        {
+            bool available = _isActive && !IsSoftwareStopped && !_inputFault;
+            StartCCDButton.IsEnabled = available && _isCCDConnected && !_isCollecting;
+            StopCCDButton.IsEnabled = _isCollecting;
+            IntegrationTimeComboBox.IsEnabled = available && !_isCollecting;
+            RecordDataButton.IsEnabled = available && !_isSavingRecord;
+            ImportDataButton.IsEnabled = available && !_isCollecting;
+        }
+
         private void CheckEmergencyStopStatus()
         {
-            if (App.Current.MainWindow is MainWindow mainWindow)
+            UpdateAcquisitionControls();
+            if (IsSoftwareStopped)
             {
-                if (mainWindow.IsEmergencyStopped)
-                {
-                    if (_isCollecting)
-                    {
-                        _ = StopCCDCollection();
-                    }
-
-                    if (ExperimentResultText != null)
-                    {
-                        ExperimentResultText.Text = "急停状态 - 请解除急停";
-                        ExperimentResultText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
-                    }
-                }
-                else
-                {
-                    if (ExperimentResultText != null && ExperimentResultText.Text.Contains("急停"))
-                    {
-                        ExperimentResultText.Text = "请施加载荷并开始CCD数据采集";
-                        var accentBrush = Application.Current.Resources["AccentTextFillColorPrimaryBrush"] as Microsoft.UI.Xaml.Media.SolidColorBrush;
-                        ExperimentResultText.Foreground = accentBrush ?? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Blue);
-                    }
-                }
+                _ = StopCCDCollection();
+                ExperimentResultText.Text = "软件采集已锁定；设备断电和卸载请使用实体控制";
             }
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             base.OnNavigatedTo(e);
+            _isActive = true;
             CheckEmergencyStopStatus();
 
             if (e.Parameter is ExperimentRecord record)
             {
-                _currentRecord = record;
                 await LoadExperimentRecord(record);
             }
 
@@ -168,14 +170,15 @@ namespace YoungsModuleTest.Views
         protected override async void OnNavigatedFrom(NavigationEventArgs e)
         {
             base.OnNavigatedFrom(e);
-            await CleanupCamera();
-            await CleanupSerialPort();
+            await ShutdownAsync();
         }
 
-        private async Task InitializePageAsync()
+        public async Task ShutdownAsync()
         {
-            await LoadAvailableCameras();
-            await LoadAvailableSerialPorts();
+            _isActive = false;
+            UpdateAcquisitionControls();
+            await CleanupSerialPort();
+            await CleanupCamera();
         }
 
         #region 摄像头相关方法
@@ -229,11 +232,13 @@ namespace YoungsModuleTest.Views
 
         private async Task InitializeCamera()
         {
+            await _cameraGate.WaitAsync();
             try
             {
-                await CleanupCamera();
+                await CleanupCameraCore();
+                if (!_isActive) return;
 
-                if (CameraSelectionComboBox.SelectedItem is not CameraDevice selectedDevice)
+                if (CameraSelectionComboBox.SelectedItem is not CameraDevice selectedDevice || selectedDevice.SourceGroup == null)
                 {
                     CameraStatusText.Text = "请选择摄像头设备";
                     return;
@@ -253,6 +258,11 @@ namespace YoungsModuleTest.Views
                 };
 
                 await mediaCapture.InitializeAsync(mediaCaptureInitializationSettings);
+                if (!_isActive)
+                {
+                    await CleanupCameraCore();
+                    return;
+                }
 
                 if (mediaFrameSourceGroup.SourceInfos.Count > 0)
                 {
@@ -273,10 +283,19 @@ namespace YoungsModuleTest.Views
                 CameraStatusText.Visibility = Visibility.Visible;
                 CapturePhotoButton.IsEnabled = false;
                 StartCameraButton.Content = "启动摄像头";
+                await CleanupCameraCore();
             }
+            finally { _cameraGate.Release(); }
         }
 
         private async Task CleanupCamera()
+        {
+            await _cameraGate.WaitAsync();
+            try { await CleanupCameraCore(); }
+            finally { _cameraGate.Release(); }
+        }
+
+        private async Task CleanupCameraCore()
         {
             _isCameraInitialized = false;
             CapturePhotoButton.IsEnabled = false;
@@ -314,30 +333,28 @@ namespace YoungsModuleTest.Views
 
         private async void CapturePhoto_Click(object sender, RoutedEventArgs e)
         {
-            if (mediaCapture == null || !_isCameraInitialized)
-                return;
-
+            await _cameraGate.WaitAsync();
             try
             {
-                var imgFormat = ImageEncodingProperties.CreateJpeg();
-                var stream = new InMemoryRandomAccessStream();
-                await mediaCapture.CapturePhotoToStreamAsync(imgFormat, stream);
+                if (!_isActive || mediaCapture == null || !_isCameraInitialized) return;
+                using var stream = new InMemoryRandomAccessStream();
+                await mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), stream);
                 stream.Seek(0);
-
-                BitmapImage bmpImage = new BitmapImage();
-                await bmpImage.SetSourceAsync(stream);
-                _capturedPhotos.Insert(0, bmpImage);
-
-                // 保存照片到设备相册的"杨氏模量测试仪"文件夹
+                var image = new BitmapImage { DecodePixelWidth = 1600 };
+                await image.SetSourceAsync(stream);
                 await SavePhotoToDevice(stream);
-
+                if (!_isActive) return;
+                _capturedPhotos.Insert(0, image);
+                if (_capturedPhotos.Count > 16) _capturedPhotos.RemoveAt(16);
                 RefreshPhotoLayout();
                 capturedText.Visibility = Visibility.Visible;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"拍照失败: {ex.Message}");
+                CameraStatusText.Text = $"照片未保存: {ex.Message}";
+                CameraStatusText.Visibility = Visibility.Visible;
             }
+            finally { _cameraGate.Release(); }
         }
 
         private async Task SavePhotoToDevice(InMemoryRandomAccessStream stream)
@@ -367,16 +384,14 @@ namespace YoungsModuleTest.Views
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"保存照片失败: {ex.Message}");
+                throw new IOException("照片写入图片库失败。", ex);
             }
         }
 
         private void RefreshPhotoLayout()
         {
-            if (_capturedPhotos.Count == 0)
-                return;
-
             snapshots.Children.Clear();
+            if (_capturedPhotos.Count == 0) return;
 
             double containerWidth = snapshotsContainer.ActualWidth;
             if (containerWidth <= 0)
@@ -384,7 +399,7 @@ namespace YoungsModuleTest.Views
 
             int photosPerRow = Math.Max(1, (int)(containerWidth / (PHOTO_WIDTH + PHOTO_MARGIN * 2)));
 
-            StackPanel currentRow = null;
+            StackPanel? currentRow = null;
             int currentRowCount = 0;
 
             foreach (var photo in _capturedPhotos)
@@ -473,127 +488,129 @@ namespace YoungsModuleTest.Views
 
         private async Task InitializeSerialPort(string portName)
         {
+            await _connectionGate.WaitAsync();
+            SerialPort? opened = null;
             try
             {
-                await CleanupSerialPort();
-
-                await Task.Run(() =>
+                await CleanupSerialPortCore();
+                if (!_isActive) return;
+                opened = new SerialPort(portName, 921600, Parity.None, 8, StopBits.One)
                 {
-                    _serialPort = new SerialPort(portName, 921600, Parity.None, 8, StopBits.One)
-                    {
-                        ReadTimeout = 5000,
-                        WriteTimeout = 1000
-                    };
-
+                    ReadTimeout = 1000,
+                    WriteTimeout = 1000
+                };
+                await Task.Run(opened.Open);
+                if (!_isActive) return;
+                lock (_portGate)
+                {
+                    _serialPort = opened;
                     _serialPort.DataReceived += SerialPort_DataReceived;
-                    _serialPort.Open();
-                });
-
-                await SendSerialCommand(_currentIntegrationTime);
-
+                    opened = null;
+                    _inputFault = false;
+                }
                 _isCCDConnected = true;
-
-                this.DispatcherQueue.TryEnqueue(() =>
-                {
-                    CCDStatusText.Text = "CCD已连接";
-                    CCDStatusText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Green);
-                });
+                CCDStatusText.Text = "CCD串口已连接";
+                CCDStatusText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Green);
             }
             catch (Exception ex)
             {
-                _isCCDConnected = false;
-
-                this.DispatcherQueue.TryEnqueue(() =>
-                {
-                    CCDStatusText.Text = "串口连接失败";
-                    CCDStatusText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
-                });
-
-                throw new InvalidOperationException($"串口连接失败: {ex.Message}");
+                await CleanupSerialPortCore();
+                CCDStatusText.Text = $"串口连接失败: {ex.Message}";
+                CCDStatusText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
+            }
+            finally
+            {
+                opened?.Dispose();
+                _connectionGate.Release();
+                UpdateAcquisitionControls();
             }
         }
 
         private async Task CleanupSerialPort()
         {
-            _isCCDConnected = false;
-
-            if (_dataCollectionTimer != null)
-            {
-                _dataCollectionTimer.Dispose();
-                _dataCollectionTimer = null;
-            }
-
-            _cancellationTokenSource?.Cancel();
-
-            if (_serialPort != null)
-            {
-                try
-                {
-                    while (_receiveDataFlag)
-                    {
-                        await Task.Delay(10);
-                    }
-
-                    if (_serialPort.IsOpen)
-                    {
-                        _serialPort.Close();
-                    }
-                    _serialPort.DataReceived -= SerialPort_DataReceived;
-                    _serialPort.Dispose();
-                }
-                catch { }
-                _serialPort = null;
-            }
-
-            await Task.CompletedTask;
+            await _connectionGate.WaitAsync();
+            try { await CleanupSerialPortCore(); }
+            finally { _connectionGate.Release(); }
         }
 
-        private async Task<bool> SendSerialCommand(byte command)
+        private async Task CleanupSerialPortCore()
         {
-            try
+            _isCCDConnected = false;
+            await StopCCDCollection();
+            SerialPort? port;
+            lock (_portGate)
             {
-                if (_serialPort == null || !_serialPort.IsOpen)
-                    return false;
-
-                await Task.Run(() =>
-                {
-                    _serialPort.Write(new byte[] { command }, 0, 1);
-                });
-
-                return true;
+                port = _serialPort;
+                _serialPort = null;
+                if (port != null) port.DataReceived -= SerialPort_DataReceived;
+                _frames.Clear();
             }
-            catch (Exception ex)
+            // SerialPort.Dispose may wait for its callback; do not hold the receive lock.
+            if (port != null)
             {
-                Debug.WriteLine($"发送串口命令失败: {ex.Message}");
-                return false;
+                try { await Task.Run(port.Dispose); }
+                catch (Exception ex) { CCDStatusText.Text = $"串口关闭失败: {ex.Message}"; }
             }
         }
+
+        private Task SendSerialCommand(byte command, CancellationToken token) => Task.Run(() =>
+        {
+            token.ThrowIfCancellationRequested();
+            lock (_portGate)
+            {
+                token.ThrowIfCancellationRequested();
+                if (_serialPort == null || !_serialPort.IsOpen)
+                    throw new IOException("CCD serial port is not open.");
+                _serialPort.Write(new byte[] { command }, 0, 1);
+            }
+        }, token);
 
         private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
-            try
+            lock (_portGate)
             {
-                _receiveDataFlag = true;
-                int num = _serialPort?.BytesToRead ?? 0;
-                if (num > 0 && _serialPort != null)
+                if (!ReferenceEquals(sender, _serialPort) || !_isCollecting || _inputFault) return;
+                int generation = _collectionGeneration;
+                try
                 {
-                    byte[] receivedBuffer = new byte[num];
-                    _serialPort.Read(receivedBuffer, 0, num);
-
-                    lock (_dataBuffer)
-                    {
-                        _dataBuffer.AddRange(receivedBuffer);
-                    }
+                    int count = _serialPort!.BytesToRead;
+                    if (count > CcdFrameBuffer.Capacity)
+                        throw new InvalidDataException("CCD receive buffer overflow; reconnect before collecting.");
+                    if (count == 0) return;
+                    var bytes = new byte[count];
+                    int read = _serialPort.Read(bytes, 0, count);
+                    if (!_frames.Append(bytes.AsSpan(0, read)))
+                        throw new InvalidDataException("CCD receive buffer overflow; reconnect before collecting.");
+                }
+                catch (Exception ex)
+                {
+                    _inputFault = true;
+                    _cancellationTokenSource?.Cancel();
+                    PostAcquisitionFault(ex.Message, generation);
                 }
             }
-            catch (Exception ex)
+        }
+
+        private void PostAcquisitionFault(string message, int generation)
+        {
+            DispatcherQueue.TryEnqueue(async () =>
             {
-                Debug.WriteLine($"串口数据接收失败: {ex.Message}");
-            }
-            finally
-            {
-                _receiveDataFlag = false;
-            }
+                await _connectionGate.WaitAsync();
+                try
+                {
+                    // Ignore faults queued by an older acquisition.
+                    if (generation != _collectionGeneration) return;
+                    _inputFault = true;
+                    await CleanupSerialPortCore();
+                    CCDStatusText.Text = $"采集已停止，请重新连接: {message}";
+                    CCDStatusText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
+                }
+                finally
+                {
+                    _connectionGate.Release();
+                    UpdateAcquisitionControls();
+                }
+            });
         }
 
         private async void SerialPortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -614,18 +631,13 @@ namespace YoungsModuleTest.Views
             }
         }
 
-        private async void IntegrationTimeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void IntegrationTimeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (IntegrationTimeComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tagStr)
+            if (IntegrationTimeComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag &&
+                byte.TryParse(tag.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber, null, out byte command))
             {
-                if (byte.TryParse(tagStr.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber, null, out byte command))
-                {
-                    _currentIntegrationTime = command;
-                    if (_isCCDConnected)
-                    {
-                        await SendSerialCommand(command);
-                    }
-                }
+                // Applied at the next explicit start, never while software-locked.
+                _currentIntegrationTime = command;
             }
         }
 
@@ -647,96 +659,103 @@ namespace YoungsModuleTest.Views
 
         private async Task StartCCDCollection()
         {
-            if (_isCollecting) return;
-
-            _isCollecting = true;
-            StartCCDButton.IsEnabled = false;
-            StopCCDButton.IsEnabled = true;
-            ChartPlaceholderText.Visibility = Visibility.Collapsed;
-
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            _ = Task.Run(() => ProcessCCDDataLoop(_cancellationTokenSource.Token));
-
-            ExperimentResultText.Text = "CCD数据采集中...";
+            await _collectionGate.WaitAsync();
+            try
+            {
+                if (!_isActive || IsSoftwareStopped || _inputFault || !_isCCDConnected || _isCollecting) return;
+                lock (_portGate)
+                {
+                    if (_serialPort == null || !_serialPort.IsOpen) throw new IOException("CCD serial port is not open.");
+                    _serialPort.DiscardInBuffer();
+                    _frames.Clear();
+                    _isCollecting = true;
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    int generation = Interlocked.Increment(ref _collectionGeneration);
+                    var token = _cancellationTokenSource.Token;
+                    byte integrationTime = _currentIntegrationTime;
+                    _collectionTask = Task.Run(() => ProcessCCDDataLoop(token, generation, integrationTime));
+                }
+                ChartPlaceholderText.Visibility = Visibility.Collapsed;
+                ExperimentResultText.Text = "CCD数据采集中...";
+            }
+            catch (Exception ex)
+            {
+                _inputFault = true;
+                PostAcquisitionFault(ex.Message, _collectionGeneration);
+            }
+            finally
+            {
+                _collectionGate.Release();
+                UpdateAcquisitionControls();
+            }
         }
 
         private async Task StopCCDCollection()
         {
-            if (!_isCollecting) return;
-
-            _isCollecting = false;
-            StartCCDButton.IsEnabled = true;
-            StopCCDButton.IsEnabled = false;
-
-            _cancellationTokenSource?.Cancel();
-
-            ExperimentResultText.Text = "CCD数据采集已停止";
-            await Task.CompletedTask;
+            await _collectionGate.WaitAsync();
+            try
+            {
+                lock (_portGate)
+                {
+                    _isCollecting = false;
+                    Interlocked.Increment(ref _collectionGeneration);
+                    _cancellationTokenSource?.Cancel();
+                }
+                await _collectionTask;
+                lock (_portGate)
+                {
+                    _cancellationTokenSource?.Dispose();
+                    _cancellationTokenSource = null;
+                    _frames.Clear();
+                }
+            }
+            finally
+            {
+                _collectionGate.Release();
+                UpdateAcquisitionControls();
+            }
         }
 
-        private async Task ProcessCCDDataLoop(CancellationToken cancellationToken)
+        private async Task ProcessCCDDataLoop(CancellationToken token, int generation, byte integrationTime)
         {
             try
             {
-                while (_isCollecting && !cancellationToken.IsCancellationRequested)
+                await SendSerialCommand(integrationTime, token);
+                while (true)
                 {
-                    if (_serialPort != null && _serialPort.IsOpen)
-                    {
-                        await SendSerialCommand(0xA2);
-                        await Task.Delay(100, cancellationToken);
-                        await ProcessBufferedData();
-                        await Task.Delay(200, cancellationToken);
-                    }
+                    token.ThrowIfCancellationRequested();
+                    await SendSerialCommand(0xA2, token);
+                    await Task.Delay(100, token);
+                    ProcessBufferedData(generation);
+                    await Task.Delay(200, token);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                // 正常取消，不处理
-            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception ex)
             {
-                Debug.WriteLine($"CCD数据处理循环失败: {ex.Message}");
+                if (!token.IsCancellationRequested) PostAcquisitionFault(ex.Message, generation);
             }
         }
 
-        private async Task ProcessBufferedData()
+        private void ProcessBufferedData(int generation)
         {
-            List<byte> currentBuffer;
-
-            lock (_dataBuffer)
+            var frame = _frames.TakeFrame();
+            if (frame == null || Interlocked.CompareExchange(ref _frameUpdatePending, 1, 0) != 0) return;
+            if (!DispatcherQueue.TryEnqueue(() =>
             {
-                if (_dataBuffer.Count < 3648)
-                    return;
-
-                currentBuffer = new List<byte>(_dataBuffer.Take(3648));
-                _dataBuffer.RemoveRange(0, 3648);
-            }
-
-            var dataPoints = new List<CCDDataPoint>();
-            for (int i = 0; i < currentBuffer.Count; i++)
-            {
-                dataPoints.Add(new CCDDataPoint
+                try
                 {
-                    PixelIndex = i,
-                    Intensity = currentBuffer[i]
-                });
-            }
-
-            this.DispatcherQueue.TryEnqueue(() =>
-            {
-                _ccdData = dataPoints;
-                AnalyzeBoundaryPoints();
-                UpdateCCDChart();
-                UpdateStatistics();
-            });
-
-            await Task.CompletedTask;
+                    if (!_isActive || IsSoftwareStopped || !_isCollecting || generation != _collectionGeneration) return;
+                    _ccdData = frame.Select((value, index) => new CCDDataPoint { PixelIndex = index, Intensity = value }).ToList();
+                    AnalyzeBoundaryPoints();
+                    UpdateCCDChart();
+                    UpdateStatistics();
+                }
+                finally { Interlocked.Exchange(ref _frameUpdatePending, 0); }
+            })) Interlocked.Exchange(ref _frameUpdatePending, 0);
         }
 
-        // 修正的边界检测算法 - 检测中间低谷区域
-        // 改进的边界检测算法 - 替换ExperimentPage.xaml.cs中的AnalyzeBoundaryPoints方法
-        // 改进的边界检测算法 - 替换ExperimentPage.xaml.cs中的AnalyzeBoundaryPoints方法
+        // Original low-valley rule, retained for comparison with the competition software.
         private void AnalyzeBoundaryPoints()
         {
             if (_ccdData.Count == 0) return;
@@ -755,7 +774,7 @@ namespace YoungsModuleTest.Views
             // 第三步：计算剔除后数据的平均值
             var secondAverage = belowAverageValues.Average();
 
-            // 第四步：确定阈值为 secondAverage + 10
+// 第四步：确定阈值为 secondAverage + 5
             var threshold = secondAverage + 5;
 
             // 第五步：找到所有小于等于阈值的点的索引
@@ -1137,7 +1156,7 @@ namespace YoungsModuleTest.Views
             }
 
             // 对比度计算
-            double contrast = (max - min) / (max + min) * 100;
+            double contrast = max + min == 0 ? 0 : (double)(max - min) / (max + min) * 100;
             ContrastText.Text = contrast.ToString("F1") + "%";
 
             // 显示低谷长度
@@ -1148,54 +1167,77 @@ namespace YoungsModuleTest.Views
         #region 数据记录功能
         private async void RecordDataButton_Click(object sender, RoutedEventArgs e)
         {
-            if (double.IsNaN(AppliedForceBox.Value))
+            if (!_isActive || IsSoftwareStopped || _inputFault || _isSavingRecord) return;
+
+            if (!double.IsFinite(AppliedForceBox.Value) || AppliedForceBox.Value < 0)
             {
                 ExperimentResultText.Text = "请先输入施加力值";
                 ExperimentResultText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
                 return;
             }
 
-            if (_currentIlluminatedLength <= 0)
+            if (!double.IsFinite(_currentIlluminatedLength) || _currentIlluminatedLength <= 0)
             {
                 ExperimentResultText.Text = "请先采集CCD数据";
                 ExperimentResultText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
                 return;
             }
 
-            var measurement = new MeasurementRecord
+            if (_ccdData.Count != CcdFrameBuffer.FrameSize ||
+                _ccdData.Max(p => p.Intensity) == _ccdData.Min(p => p.Intensity))
             {
-                SerialNumber = _measurementRecords.Count + 1,
-                AppliedForce = AppliedForceBox.Value,
-                IlluminatedLength = _currentIlluminatedLength,
-                Timestamp = DateTime.Now,
-                MaterialType = MaterialTypeTextBox.Text,
-                // 新增：保存边界信息
-                LeftBoundary = _leftBoundary,
-                RightBoundary = _rightBoundary,
-                PixelLength = Math.Abs(_rightBoundary - _leftBoundary),
-                ActualLength = _currentIlluminatedLength
-            };
-
-            _measurementRecords.Add(measurement);
-            UpdateMeasurementsList();
-
-            // 如果是第一个数据且当前没有实验记录，创建新的实验记录
-            if (_measurementRecords.Count == 1 && _currentRecord == null)
-            {
-                await CreateNewExperimentRecord();
+                ExperimentResultText.Text = "当前波形没有可辨识的明暗变化，不能记录为有效测量。";
+                return;
             }
-            else if (_currentRecord != null)
+            _isSavingRecord = true;
+            UpdateAcquisitionControls();
+            try
             {
-                // 更新现有实验记录
-                await UpdateExperimentRecord();
+                var measurement = new MeasurementRecord
+                {
+                    SerialNumber = _measurementRecords.Count + 1,
+                    AppliedForce = AppliedForceBox.Value,
+                    IlluminatedLength = _currentIlluminatedLength,
+                    Timestamp = DateTime.Now,
+                    MaterialType = MaterialTypeTextBox.Text,
+                    // 新增：保存边界信息
+                    LeftBoundary = _leftBoundary,
+                    RightBoundary = _rightBoundary,
+                    PixelLength = Math.Abs(_rightBoundary - _leftBoundary),
+                    ActualLength = _currentIlluminatedLength
+                };
+
+                _measurementRecords.Add(measurement);
+                UpdateMeasurementsList();
+
+                // 如果是第一个数据且当前没有实验记录，创建新的实验记录
+                if (_measurementRecords.Count == 1 && _currentRecord == null)
+                {
+                    await CreateNewExperimentRecord();
+                }
+                else if (_currentRecord != null)
+                {
+                    // 更新现有实验记录
+                    await UpdateExperimentRecord();
+                }
+
+                // 保留杨氏模量计算逻辑但不显示结果（逻辑保留供后续使用）
+                CalculateYoungsModulus();
+
+                ExperimentResultText.Text = $"已记录第{measurement.SerialNumber}组数据";
+                var accentBrush = Application.Current.Resources["AccentTextFillColorPrimaryBrush"] as SolidColorBrush;
+                ExperimentResultText.Foreground = accentBrush ?? new SolidColorBrush(Microsoft.UI.Colors.Blue);
             }
-
-            // 保留杨氏模量计算逻辑但不显示结果（逻辑保留供后续使用）
-            CalculateYoungsModulus();
-
-            ExperimentResultText.Text = $"已记录第{measurement.SerialNumber}组数据";
-            var accentBrush = Application.Current.Resources["AccentTextFillColorPrimaryBrush"] as SolidColorBrush;
-            ExperimentResultText.Foreground = accentBrush ?? new SolidColorBrush(Microsoft.UI.Colors.Blue);
+            catch (Exception ex)
+            {
+                ExperimentResultText.Text = $"记录未保存，当前数据仍在内存中: {ex.Message}";
+                ExperimentResultText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
+            }
+            finally
+            {
+                _isSavingRecord = false;
+                UpdateAcquisitionControls();
+            }
         }
 
 
@@ -1209,7 +1251,7 @@ namespace YoungsModuleTest.Views
         {
             var newRecord = new ExperimentRecord
             {
-                Name = $"杨氏模量实验_{DateTime.Now:yyyyMMdd_HHmmss}",
+Name = $"杨氏模量实验_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{Guid.NewGuid():N}",
                 DateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
                 Description = $"材料：{MaterialTypeTextBox.Text}，数据点：{_measurementRecords.Count}",
                 MaterialType = MaterialTypeTextBox.Text,
@@ -1235,85 +1277,66 @@ namespace YoungsModuleTest.Views
 
             // 计算并保存杨氏模量
             var youngsModulus = CalculateByLeastSquares();
-            if (youngsModulus.HasValue)
-            {
-                _currentRecord.YoungsModulus = youngsModulus.Value;
-            }
+            _currentRecord.YoungsModulus = youngsModulus.HasValue && double.IsFinite(youngsModulus.Value)
+                ? youngsModulus.Value : null;
 
             await SaveExperimentRecord(_currentRecord, true);
         }
 
         private async Task SaveExperimentRecord(ExperimentRecord record, bool isUpdate = false)
         {
+            await RecordFile.Gate.WaitAsync();
             try
             {
-                var localFolder = ApplicationData.Current.LocalFolder;
-                var recordsFile = await localFolder.TryGetItemAsync("experiment_records.json");
+                string path = System.IO.Path.Combine(ApplicationData.Current.LocalFolder.Path, "experiment_records.json");
+                string? json = await RecordFile.ReadAsync(path);
+                var records = json == null ? new List<ExperimentRecord>() :
+                    JsonSerializer.Deserialize<List<ExperimentRecord>>(json)
+                        ?? throw new InvalidDataException("Experiment records must be a JSON array.");
+                if (records.Any(r => r == null)) throw new InvalidDataException("Null experiment record.");
+                int index = records.FindIndex(r => r.Name == record.Name);
+                if (index >= 0) records[index] = record;
+                else records.Add(record);
+                await RecordFile.WriteAsync(path, JsonSerializer.Serialize(records,
+                    new JsonSerializerOptions { WriteIndented = true }));
+            }
+            finally { RecordFile.Gate.Release(); }
+        }
 
-                List<ExperimentRecord> records = new List<ExperimentRecord>();
+        private async void ClearAllMeasurementsButton_Click(object sender, RoutedEventArgs e)
+        {
+            await DeleteMeasurement(null);
+        }
 
-                if (recordsFile is StorageFile file)
-                {
-                    var json = await FileIO.ReadTextAsync(file);
-                    var existingRecords = JsonSerializer.Deserialize<ExperimentRecord[]>(json);
-                    if (existingRecords != null)
-                    {
-                        records.AddRange(existingRecords);
-                    }
-                }
+        private async void DeleteMeasurementButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is MeasurementRecord record)
+                await DeleteMeasurement(record);
+        }
 
-                if (isUpdate)
-                {
-                    // 更新现有记录
-                    var existingIndex = records.FindIndex(r => r.Name == record.Name);
-                    if (existingIndex >= 0)
-                    {
-                        records[existingIndex] = record;
-                    }
-                    else
-                    {
-                        records.Add(record);
-                    }
-                }
-                else
-                {
-                    records.Add(record);
-                }
-
-                var newRecordsFile = await localFolder.CreateFileAsync("experiment_records.json",
-                    CreationCollisionOption.ReplaceExisting);
-
-                var newJson = JsonSerializer.Serialize(records.ToArray(),
-                    new JsonSerializerOptions { WriteIndented = true });
-                await FileIO.WriteTextAsync(newRecordsFile, newJson);
+        private async Task DeleteMeasurement(MeasurementRecord? record)
+        {
+            if (_isSavingRecord) return;
+            _isSavingRecord = true;
+            UpdateAcquisitionControls();
+            try
+            {
+                if (record == null) _measurementRecords.Clear();
+                else _measurementRecords.Remove(record);
+                for (int i = 0; i < _measurementRecords.Count; i++) _measurementRecords[i].SerialNumber = i + 1;
+                UpdateMeasurementsList();
+                CalculateYoungsModulus();
+                await UpdateExperimentRecord();
+                ExperimentResultText.Text = "测量记录已更新";
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"保存实验记录失败: {ex.Message}");
+                ExperimentResultText.Text = $"修改未保存，当前数据仍在内存中: {ex.Message}";
             }
-        }
-
-        private void ClearAllMeasurementsButton_Click(object sender, RoutedEventArgs e)
-        {
-            _measurementRecords.Clear();
-            UpdateMeasurementsList();
-            CalculateYoungsModulus();
-        }
-
-        private void DeleteMeasurementButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.DataContext is MeasurementRecord record)
+            finally
             {
-                _measurementRecords.Remove(record);
-
-                // 重新编号
-                for (int i = 0; i < _measurementRecords.Count; i++)
-                {
-                    _measurementRecords[i].SerialNumber = i + 1;
-                }
-
-                UpdateMeasurementsList();
-                CalculateYoungsModulus();
+                _isSavingRecord = false;
+                UpdateAcquisitionControls();
             }
         }
         #endregion
@@ -1394,11 +1417,7 @@ namespace YoungsModuleTest.Views
             return filteredData;
         }
 
-        // 修正的杨氏模量计算方法 - 替换ExperimentPage.xaml.cs中的相关方法
-
-        // 修正后的杨氏模量计算方法
-        // 修正后的杨氏模量计算方法
-        // 基于ΔF-ΔL关系的杨氏模量计算
+        // Original least-squares rule for the change in load versus estimated wire elongation.
         private double? CalculateByLeastSquares()
         {
             if (_measurementRecords.Count < 2) return null;
@@ -1411,7 +1430,7 @@ namespace YoungsModuleTest.Views
             var baseForce = sortedData[0].AppliedForce;
 
             // 钢丝参数
-            var wireLengthM = 0.530; // 实际受力长度：530mm
+            var wireLengthM = _wireLength / 1000.0; // Configured length: mm to m
             var wireDiameterM = _wireDiameter / 1000.0;
             var wireArea = Math.PI * Math.Pow(wireDiameterM / 2, 2);
 
@@ -1631,41 +1650,27 @@ CCD数据统计：
 
         private async Task ImportCCDDataFromCSV(StorageFile file)
         {
-            try
+            if (!_isActive || IsSoftwareStopped || _isCollecting || _inputFault)
+                throw new InvalidOperationException("请先停止采集并解除软件锁定，再导入CCD CSV。");
+            using var stream = await file.OpenStreamForReadAsync();
+            using var buffer = new MemoryStream();
+            var bytes = new byte[4096];
+            int read;
+            while ((read = await stream.ReadAsync(bytes.AsMemory())) != 0)
             {
-                var content = await FileIO.ReadTextAsync(file);
-                var lines = content.Split('\n');
-                _ccdData.Clear();
-
-                for (int i = 1; i < lines.Length; i++)
-                {
-                    var parts = lines[i].Trim().Split(',');
-                    if (parts.Length >= 2)
-                    {
-                        if (int.TryParse(parts[0], out int pixelIndex) &&
-                            byte.TryParse(parts[1], out byte intensity))
-                        {
-                            _ccdData.Add(new CCDDataPoint
-                            {
-                                PixelIndex = pixelIndex,
-                                Intensity = intensity
-                            });
-                        }
-                    }
-                }
-
-                AnalyzeBoundaryPoints();
-                UpdateCCDChart();
-                UpdateStatistics();
-                ExperimentResultText.Text = "历史数据导入成功";
-                var accentBrush = Application.Current.Resources["AccentTextFillColorPrimaryBrush"] as SolidColorBrush;
-                ExperimentResultText.Foreground = accentBrush ?? new SolidColorBrush(Microsoft.UI.Colors.Blue);
+                if (buffer.Length + read > CcdCsv.MaxFileBytes)
+                    throw new InvalidDataException("CCD CSV不能超过128 KiB。");
+                await buffer.WriteAsync(bytes.AsMemory(0, read));
             }
-            catch (Exception ex)
-            {
-                ExperimentResultText.Text = $"数据导入失败: {ex.Message}";
-                ExperimentResultText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
-            }
+            var frame = CcdCsv.Parse(new System.Text.UTF8Encoding(false, true).GetString(buffer.ToArray()));
+            if (!_isActive || IsSoftwareStopped || _isCollecting || _inputFault) return;
+            // Replace the displayed frame only after the entire CSV has passed validation.
+            _ccdData = frame.Select((value, index) => new CCDDataPoint { PixelIndex = index, Intensity = value }).ToList();
+            AnalyzeBoundaryPoints();
+            UpdateCCDChart();
+            UpdateStatistics();
+            ChartPlaceholderText.Visibility = Visibility.Collapsed;
+            ExperimentResultText.Text = "已导入CCD CSV（离线数据）";
         }
         #endregion
 
@@ -1674,84 +1679,70 @@ CCD数据统计：
         {
             try
             {
+                var measurements = string.IsNullOrEmpty(record.MeasurementData)
+                    ? new List<MeasurementRecord>()
+                    : JsonSerializer.Deserialize<List<MeasurementRecord>>(record.MeasurementData)
+                        ?? throw new InvalidDataException("Measurement data must be an array.");
+                if (measurements.Count > 10000 || measurements.Any(m => m == null ||
+                    !double.IsFinite(m.AppliedForce) || m.AppliedForce < 0 ||
+                    !double.IsFinite(m.IlluminatedLength) || m.IlluminatedLength <= 0))
+                    throw new InvalidDataException("Invalid measurement record.");
+
+                var frame = string.IsNullOrEmpty(record.CCDData)
+                    ? new List<CCDDataPoint>()
+                    : JsonSerializer.Deserialize<List<CCDDataPoint>>(record.CCDData)
+                        ?? throw new InvalidDataException("CCD data must be an array.");
+                if (frame.Count != 0 && (frame.Count != CcdFrameBuffer.FrameSize ||
+                    frame.Where((p, i) => p == null || p.PixelIndex != i).Any()))
+                    throw new InvalidDataException("CCD record must contain one ordered 3648-sample frame.");
+
+                var photos = new List<BitmapImage>();
+                foreach (var encoded in (record.CapturedPhotos ?? new List<string>()).Take(16))
+                {
+                    var image = await ConvertBase64ToBitmap(encoded);
+                    if (image != null) photos.Add(image);
+                    if (!_isActive) return;
+                }
+                if (!_isActive) return;
+
+                // Apply a record only after its numeric payload has passed validation.
+                _currentRecord = record;
                 MaterialTypeTextBox.Text = record.MaterialType ?? "";
-
-                // 恢复测量数据
-                if (!string.IsNullOrEmpty(record.MeasurementData))
+                _measurementRecords = measurements;
+                UpdateMeasurementsList();
+                _ccdData = frame;
+                _currentIlluminatedLength = 0;
+                if (_ccdData.Count != 0)
                 {
-                    var measurements = JsonSerializer.Deserialize<List<MeasurementRecord>>(record.MeasurementData);
-                    if (measurements != null)
-                    {
-                        _measurementRecords = measurements;
-                        UpdateMeasurementsList();
-                        CalculateYoungsModulus();
-                    }
+                    AnalyzeBoundaryPoints();
+                    UpdateCCDChart();
+                    UpdateStatistics();
                 }
-
-                // 恢复CCD数据
-                if (!string.IsNullOrEmpty(record.CCDData))
-                {
-                    var ccdData = JsonSerializer.Deserialize<List<CCDDataPoint>>(record.CCDData);
-                    if (ccdData != null)
-                    {
-                        _ccdData = ccdData;
-                        _leftBoundary = record.LeftBoundary;
-                        _rightBoundary = record.RightBoundary;
-                        _currentIlluminatedLength = record.CurrentIlluminatedLength;
-
-                        UpdateCCDChart();
-                        UpdateStatistics();
-                    }
-                }
-
-                // 恢复照片数据
-                _capturedPhotos.Clear();
-                foreach (var base64Photo in record.CapturedPhotos)
-                {
-                    var bitmap = await ConvertBase64ToBitmap(base64Photo);
-                    if (bitmap != null)
-                    {
-                        _capturedPhotos.Add(bitmap);
-                    }
-                }
+                _capturedPhotos = photos;
                 RefreshPhotoLayout();
-                if (_capturedPhotos.Count > 0)
+                capturedText.Visibility = photos.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                foreach (var item in IntegrationTimeComboBox.Items.OfType<ComboBoxItem>())
                 {
-                    capturedText.Visibility = Visibility.Visible;
-                }
-
-                // 恢复实验参数设置
-                if (!string.IsNullOrEmpty(record.IntegrationTime))
-                {
-                    for (int i = 0; i < IntegrationTimeComboBox.Items.Count; i++)
+                    if (item.Content?.ToString() == record.IntegrationTime)
                     {
-                        if ((IntegrationTimeComboBox.Items[i] as ComboBoxItem)?.Content?.ToString() == record.IntegrationTime)
-                        {
-                            IntegrationTimeComboBox.SelectedIndex = i;
-                            break;
-                        }
+                        IntegrationTimeComboBox.SelectedItem = item;
+                        break;
                     }
                 }
-
-                ExperimentResultText.Text = $"已恢复实验记录：{record.Name}";
-                var accentBrush = Application.Current.Resources["AccentTextFillColorPrimaryBrush"] as SolidColorBrush;
-                ExperimentResultText.Foreground = accentBrush ?? new SolidColorBrush(Microsoft.UI.Colors.Blue);
+                CalculateYoungsModulus();
+                ExperimentResultText.Text = $"已恢复实验记录：{record.Name}；请核对当前钢丝参数";
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"加载实验记录失败: {ex.Message}");
-                ExperimentResultText.Text = "实验记录加载失败";
-                ExperimentResultText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
+                ExperimentResultText.Text = $"记录读取失败，当前数据未替换: {ex.Message}";
             }
-
-            await Task.CompletedTask;
         }
 
         private async Task<BitmapImage?> ConvertBase64ToBitmap(string base64)
         {
             try
             {
-                if (string.IsNullOrEmpty(base64)) return null;
+                if (string.IsNullOrEmpty(base64) || base64.Length > 4 * 1024 * 1024) return null;
 
                 var bytes = Convert.FromBase64String(base64);
                 using var stream = new InMemoryRandomAccessStream();
@@ -1759,7 +1750,11 @@ CCD数据统计：
                 writer.WriteBytes(bytes);
                 await writer.StoreAsync();
 
-                var bitmap = new BitmapImage();
+                stream.Seek(0);
+                var decoder = await BitmapDecoder.CreateAsync(stream);
+                if ((ulong)decoder.PixelWidth * decoder.PixelHeight > 16_000_000) return null;
+                stream.Seek(0);
+                var bitmap = new BitmapImage { DecodePixelWidth = 1600 };
                 await bitmap.SetSourceAsync(stream);
                 return bitmap;
             }
@@ -1770,30 +1765,13 @@ CCD数据统计：
         }
 
 
-        public void HandleEmergencyStop(bool isEmergencyStopped)
+        public async Task HandleEmergencyStopAsync()
         {
-            this.DispatcherQueue.TryEnqueue(() =>
-            {
-                if (isEmergencyStopped)
-                {
-                    if (_isCollecting)
-                    {
-                        _ = StopCCDCollection();
-                    }
-
-                    ExperimentResultText.Text = "急停状态 - 请解除急停";
-                    ExperimentResultText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
-                }
-                else
-                {
-                    if (ExperimentResultText.Text.Contains("急停"))
-                    {
-                        ExperimentResultText.Text = "请施加载荷并开始CCD数据采集";
-                        var accentBrush = Application.Current.Resources["AccentTextFillColorPrimaryBrush"] as SolidColorBrush;
-                        ExperimentResultText.Foreground = accentBrush ?? new SolidColorBrush(Microsoft.UI.Colors.Blue);
-                    }
-                }
-            });
+            UpdateAcquisitionControls();
+            if (IsSoftwareStopped) await StopCCDCollection();
+            ExperimentResultText.Text = IsSoftwareStopped
+                ? "软件采集已锁定；设备断电和卸载请使用实体控制"
+                : "软件锁定已解除；需要手动开始采集，仪器未执行硬件复位";
         }
 
         private async Task SaveCompleteExperimentData()
@@ -1835,7 +1813,7 @@ CCD数据统计：
                     // 计算对比度
                     var max = _currentRecord.MaxValue;
                     var min = _currentRecord.MinValue;
-                    _currentRecord.Contrast = (max - min) / (double)(max + min) * 100;
+                    _currentRecord.Contrast = max + min == 0 ? 0 : (double)(max - min) / (max + min) * 100;
                 }
 
                 _currentRecord.CurrentIlluminatedLength = _currentIlluminatedLength;
@@ -2004,13 +1982,13 @@ CCD数据统计：
             if (result == ContentDialogResult.Primary)
             {
                 // 用户点击确定，更新参数
-                if (!double.IsNaN(diameterBox.Value))
+if (double.IsFinite(diameterBox.Value) && diameterBox.Value > 0)
                     _wireDiameter = diameterBox.Value;
 
-                if (!double.IsNaN(lengthBox.Value))
+if (double.IsFinite(lengthBox.Value) && lengthBox.Value > 0)
                     _wireLength = lengthBox.Value;
 
-                if (!double.IsNaN(ratioBox.Value))
+if (double.IsFinite(ratioBox.Value) && ratioBox.Value > 0)
                     _ccdToWireRatio = ratioBox.Value;
 
                 // 重新计算杨氏模量
@@ -2049,14 +2027,14 @@ CCD数据统计：
             {
                 var localSettings = ApplicationData.Current.LocalSettings;
 
-                if (localSettings.Values.TryGetValue("WireDiameter", out var diameter))
-                    _wireDiameter = (double)diameter;
+if (localSettings.Values.TryGetValue("WireDiameter", out var diameter) && diameter is double d && double.IsFinite(d) && d > 0)
+                    _wireDiameter = d;
 
-                if (localSettings.Values.TryGetValue("WireLength", out var length))
-                    _wireLength = (double)length;
+if (localSettings.Values.TryGetValue("WireLength", out var length) && length is double l && double.IsFinite(l) && l > 0)
+                    _wireLength = l;
 
-                if (localSettings.Values.TryGetValue("CcdToWireRatio", out var ratio))
-                    _ccdToWireRatio = (double)ratio;
+if (localSettings.Values.TryGetValue("CcdToWireRatio", out var ratio) && ratio is double r && double.IsFinite(r) && r > 0)
+                    _ccdToWireRatio = r;
 
                 await Task.CompletedTask;
             }

@@ -6,7 +6,7 @@ This file keeps track of the third-party CCD and USB-to-serial tools you might n
 
 This repository does not mirror third-party executable installers, driver archives, or closed-source utilities unless their redistribution terms are clear.
 
-It's not that these tools aren't useful -- they absolutely are. The issue is that a public GitHub repo needs to distinguish between:
+The repository distinguishes between:
 
 - **Right to use:** you bought the equipment and use the tools for experiments and development.
 - **Right to redistribute:** you re-upload those tool files to a public repo for others to download.
@@ -50,7 +50,7 @@ The original vendor package references Visual Studio 2019 for the sample upper-c
 
 ## 仓库策略
 
-本仓库默认不直接上传第三方 `.exe`、驱动压缩包、闭源调试工具或 IDE 安装器。原因不是这些工具不好用——恰恰相反，它们非常实用。问题在于 GitHub 公开仓库需要区分：
+本仓库默认不直接上传第三方 `.exe`、驱动压缩包、闭源调试工具或 IDE 安装器。工具用于本地调试与工具文件的公开再分发分别处理：
 
 - **使用权**：购买设备后用于实验调试和二次开发。
 - **再分发权**：把工具文件重新上传到公开仓库供他人下载。

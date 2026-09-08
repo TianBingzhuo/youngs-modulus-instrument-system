@@ -44,7 +44,7 @@
                             Width="56"
                             Height="28"
                             CornerRadius="1"
-                            ToolTipService.ToolTip="强制停机">
+                            ToolTipService.ToolTip="停止并锁定软件采集（不替代实体急停）">
                         <FontIcon FontFamily="Segoe Fluent Icons" 
                                   Glyph="&#xE7E8;" 
                                   x:Name="PowerIcon"

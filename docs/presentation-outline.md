@@ -1,5 +1,7 @@
 # Presentation Outline
 
+> Outline of the original team presentation. Instrument diagrams and planned features are retained as project context, not verification of every software function. Current behavior and limitations are documented in the [operation guide](software-operation-guide.md). 原演示材料保留，当前软件功能以操作说明和源码为准。
+
 This is the extracted text from our project presentation deck. The original PPTX file is preserved under `docs/source-materials/演讲版本.pptx`.
 
 ## English Summary
