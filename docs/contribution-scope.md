@@ -6,7 +6,7 @@ The Young's modulus instrument was a five-person competition project. The contri
 |---|---|
 | 丁庆祥 | Online pre-lab and remote-learning software. |
 | 朱兆兴 | Mechanical structure. |
-| 田秉卓 | Offline C# instrument program and measurement-principle design; repository maintenance. |
+| 田秉卓 | Offline C# software-workflow and measurement-principle design, with substantial AI assistance in software implementation; repository maintenance. |
 | 郭智美 | Measurement-principle design and data processing. |
 | 赵思梦 | Measurement-principle design and data processing. |
 
@@ -34,7 +34,7 @@ See [../LICENSE_SCOPE.md](../LICENSE_SCOPE.md) for reuse terms.
 |---|---|
 | 丁庆祥 | 在线预习与远程学习软件。 |
 | 朱兆兴 | 机械结构。 |
-| 田秉卓 | 线下 C# 仪器程序和测量原理设计；仓库维护。 |
+| 田秉卓 | 线下 C# 软件流程与测量原理设计，实现中有大量 AI 协作；仓库维护。 |
 | 郭智美 | 测量原理设计与数据处理。 |
 | 赵思梦 | 测量原理设计与数据处理。 |
 
